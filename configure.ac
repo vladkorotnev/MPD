@@ -1,5 +1,5 @@
 AC_PREREQ(2.60)
-AC_INIT(mpd, 0.17~git, musicpd-dev-team@lists.sourceforge.net)
+AC_INIT(auPlayer, 6.08.11, support@aurender.com)
 AC_CONFIG_SRCDIR([src/main.c])
 AM_INIT_AUTOMAKE([foreign 1.10 dist-bzip2 subdir-objects])
 AM_CONFIG_HEADER(config.h)
@@ -45,7 +45,12 @@ AC_SUBST(MPD_LIBS)
 AC_SUBST(MPD_CFLAGS)
 MPD_LIBS=""
 MPD_CFLAGS=""
-
+#MPD_CFLAGS="-DWIDEA_FADING -DSSD_CACHE -DIR_VOLUME -DBLASTER_SR -DFILESIZE -DWIDEA_ID -DAU_METER_BW"
+MPD_CFLAGS="-DSSD_CACHE -DBLASTER_SR -DFILESIZE -DWIDEA_ID -DAU_METER_BW  -DWIMP_SUPPORT -I./wimp -g -I./mms"
+MPD_LIBS="-Lwimp -lwimp -Lmms -lmms"
+CFLAGS="-O2"
+CXXFLAGS="-O2"
+#LDFLAGS="-s"
 dnl ---------------------------------------------------------------------------
 dnl OS Specific Defaults
 dnl ---------------------------------------------------------------------------

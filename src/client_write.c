@@ -169,6 +169,7 @@ static void client_write_direct(struct client *client,
 		g_warning("failed to write to %i: %s",
 			  client->num, error->message);
 		g_error_free(error);
+		g_message("[client_write_direct] [%s][%d] \n", data, length);		
 		return;
 	}
 
@@ -257,9 +258,15 @@ void client_vprintf(struct client *client, const char *fmt, va_list args)
 		return;
 
 	buffer = g_malloc(length + 1);
-	vsnprintf(buffer, length + 1, fmt, args);
-	client_write(client, buffer, length);
-	g_free(buffer);
+	
+	if(buffer)
+	{
+		vsnprintf(buffer, length + 1, fmt, args);
+		client_write(client, buffer, length);	
+		g_free(buffer);
+	}
+	else
+		g_message("====> client_vprintf g_malloc fail size=[%d]", length);
 #else
 	/* On mingw32, snprintf() expects a 64 bit integer instead of
 	   a "long int" for "%li".  This is not consistent with our

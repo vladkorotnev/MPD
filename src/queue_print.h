@@ -44,6 +44,10 @@ queue_print_changes_info(struct client *client, const struct queue *queue,
 			 uint32_t version);
 
 void
+queue_print_changes_info_wl(struct client *client, const struct queue *queue,
+			 uint32_t version);
+
+void
 queue_print_changes_position(struct client *client, const struct queue *queue,
 			     uint32_t version);
 

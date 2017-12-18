@@ -47,6 +47,7 @@ extern const struct decoder_plugin wildmidi_decoder_plugin;
 extern const struct decoder_plugin fluidsynth_decoder_plugin;
 extern const struct decoder_plugin ffmpeg_decoder_plugin;
 extern const struct decoder_plugin gme_decoder_plugin;
+extern const struct decoder_plugin dsdiff_nativeplayback_plugin;
 
 const struct decoder_plugin *const decoder_plugins[] = {
 #ifdef HAVE_MAD
@@ -73,11 +74,8 @@ const struct decoder_plugin *const decoder_plugins[] = {
 #ifdef HAVE_FAAD
 	&faad_decoder_plugin,
 #endif
-#ifdef HAVE_MP4
-	&mp4ff_decoder_plugin,
-#endif
 #ifdef HAVE_MPCDEC
-	&mpcdec_decoder_plugin,
+//	&mpcdec_decoder_plugin,
 #endif
 #ifdef HAVE_WAVPACK
 	&wavpack_decoder_plugin,
@@ -100,9 +98,13 @@ const struct decoder_plugin *const decoder_plugins[] = {
 #ifdef HAVE_FFMPEG
 	&ffmpeg_decoder_plugin,
 #endif
+#ifdef HAVE_MP4
+	&mp4ff_decoder_plugin,
+#endif
 #ifdef HAVE_GME
 	&gme_decoder_plugin,
 #endif
+	&dsdiff_nativeplayback_plugin,
 	&pcm_decoder_plugin,
 	NULL
 };

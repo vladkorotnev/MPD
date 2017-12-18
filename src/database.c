@@ -44,6 +44,37 @@
 
 static struct db *db;
 static bool db_is_open;
+char mpd_db_path[1024];
+#define TMPDB_PATH "/tmp/._mpd_db"
+bool save_tempdb()
+{
+    int ret = 0;
+    char cmd[1024]={0};
+    sprintf(cmd,"cp -f %s %s",TMPDB_PATH,mpd_db_path);
+    ret = system(cmd);
+    if(ret != 0)
+    {
+        g_warning("Fail to save temp db:%s:%s",cmd,strerror(errno));
+    }
+    g_debug("TEMP db saved");
+    return ret == 0;
+}
+
+static bool tmpdb_init(char *path)
+{
+    int ret = 0;
+    char cmd[1024]={0};
+    memset(mpd_db_path,0,1024);
+    sprintf(mpd_db_path,"%s",path);
+    sprintf(cmd,"cp -f %s %s",path,TMPDB_PATH);
+    ret = system(cmd);
+    if(ret != 0)
+    {
+        g_warning("Fail to laod db to temp:%s",strerror(errno));
+    }
+    g_debug("TEMP db loaded");
+    return ret == 0;
+} 
 
 bool
 db_init(const struct config_param *path, GError **error_r)
@@ -53,10 +84,13 @@ db_init(const struct config_param *path, GError **error_r)
 
 	if (path == NULL)
 		return true;
-
 	struct config_param *param = config_new_param("database", path->line);
+#ifdef SSD_CACHE
+        config_add_block_param(param, "path", TMPDB_PATH, path->line);
+        tmpdb_init(path->value);
+#else
 	config_add_block_param(param, "path", path->value, path->line);
-
+#endif
 	db = db_plugin_new(&simple_db_plugin, param, error_r);
 
 	config_param_free(param);
@@ -130,7 +164,11 @@ db_walk(const char *uri,
 	struct db_selection selection;
 	db_selection_init(&selection, uri, true);
 
+#ifdef ORG
 	return db_visit(&selection, visitor, ctx, error_r);
+#else
+	return true;
+#endif
 }
 
 bool

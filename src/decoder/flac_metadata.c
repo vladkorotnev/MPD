@@ -273,15 +273,20 @@ flac_tag_load(const char *file, const char *char_tnum)
 			break;
 
 		flac_tag_apply_metadata(tag, char_tnum, block);
+        if(block->type == FLAC__METADATA_TYPE_STREAMINFO 
+           &&tag->time==-1)
+        {
+            g_debug("!!!!Should Skip corrupt flac file!!!!");
+            break;
+        }
 		FLAC__metadata_object_delete(block);
 	} while (FLAC__metadata_simple_iterator_next(it));
 
 	FLAC__metadata_simple_iterator_delete(it);
-
-	if (!tag_is_defined(tag)) {
+    
+	if (!tag_is_defined(tag)){        
 		tag_free(tag);
 		tag = NULL;
 	}
-
 	return tag;
 }

@@ -36,6 +36,11 @@
 #include <sys/stat.h>
 #include <stdio.h>
 
+#ifdef ORG
+#else
+#include "mapper.h"
+#endif
+
 struct song *
 song_file_load(const char *path, struct directory *parent)
 {
@@ -94,6 +99,10 @@ tag_fallback(const char *path, struct tag *tag)
 		return tag;
 }
 
+#ifndef BROKEN_FILES
+#define BROKEN_FILES "/etc/scanner/broken"
+#endif
+
 bool
 song_file_update(struct song *song)
 {
@@ -124,12 +133,40 @@ song_file_update(struct song *song)
 		song->tag = NULL;
 	}
 
+#ifdef ORG
 	if (stat(path_fs, &st) < 0 || !S_ISREG(st.st_mode)) {
 		g_free(path_fs);
 		return false;
 	}
 
 	song->mtime = st.st_mtime;
+#ifdef FILESIZE
+	song->size = st.st_size;
+#endif
+#else
+    __off64_t size = get_file_size_from_db(path_fs);
+
+    if (size == -1) {
+        g_message("check stat in song_file_update for : %s", path_fs);
+        if (stat(path_fs, &st) < 0 || !S_ISREG(st.st_mode)) {
+            g_free(path_fs);
+            return false;
+        }
+
+        song->mtime = st.st_mtime;
+    #ifdef FILESIZE
+        song->size = st.st_size;
+    #endif
+    }
+    else {
+        song->mtime = 0;
+    #ifdef FILESIZE
+        song->size = size;
+    #endif
+    }
+#endif
+	g_free(path_fs);
+	return true;
 
 	GMutex *mutex = NULL;
 	GCond *cond;
@@ -163,7 +200,7 @@ song_file_update(struct song *song)
 		}
 
 		plugin = decoder_plugin_from_suffix(suffix, plugin);
-	} while (plugin != NULL);
+	} while (0); // (plugin != NULL);
 
 	if (is != NULL)
 		input_stream_close(is);
@@ -175,7 +212,12 @@ song_file_update(struct song *song)
 
 	if (song->tag != NULL && tag_is_empty(song->tag))
 		song->tag = tag_fallback(path_fs, song->tag);
-
+    if (song->tag != NULL && song->tag->time == -1)
+    {
+        g_message("!!!!!Skip corrupt song : %s!!!!!",path_fs);        
+        writeToFile(BROKEN_FILES, path_fs, strlen(path_fs), true);
+        song->tag = NULL;
+    }
 	g_free(path_fs);
 	return song->tag != NULL;
 }

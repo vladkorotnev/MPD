@@ -290,7 +290,11 @@ queue_clear(struct queue *queue)
 {
 	for (unsigned i = 0; i < queue->length; i++) {
 		struct queue_item *item = &queue->items[i];
-
+		
+#ifdef SSD_CACHE
+//Leo , how about when deleteing from queue.?
+		deleteCache(song_get_uri(item->song));
+#endif
 		if (!song_in_database(item->song))
 			song_free(item->song);
 

@@ -32,6 +32,12 @@
   * connected by IPC socket.
   */
 static const char *remoteUrlPrefixes[] = {
+#ifdef WIMP_SUPPORT
+	"tidal://",
+	"qobuz://",
+	"bugs://",	
+	"shout://",		
+#endif
 #if defined(ENABLE_CURL) || defined(ENABLE_SOUP)
 	"http://",
 #endif
@@ -54,6 +60,10 @@ static const char *remoteUrlPrefixes[] = {
 #endif
 #ifdef ENABLE_DESPOTIFY
 	"spt://",
+#endif
+#ifdef ORG
+#else
+    "file://",
 #endif
 	NULL
 };

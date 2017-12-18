@@ -80,7 +80,7 @@ client_new(struct player_control *player_control,
 #endif	/* HAVE_WRAP */
 
 	if (client_list_is_full()) {
-		g_warning("Max Connections Reached!");
+		g_warning("Max Connections Reached! [%s]", sockaddr_to_string(sa, sa_length, NULL));
 		close_socket(fd);
 		return;
 	}

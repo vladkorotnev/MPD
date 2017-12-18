@@ -35,10 +35,10 @@ client_process_command_list(struct client *client, bool list_ok, GSList *list)
 	for (GSList *cur = list; cur != NULL; cur = g_slist_next(cur)) {
 		char *cmd = cur->data;
 
-		g_debug("command_process_list: process command \"%s\"",
-			cmd);
+	//	g_debug("command_process_list: process command \"%s\"",
+	//		cmd);
 		ret = command_process(client, num++, cmd);
-		g_debug("command_process_list: command returned %i", ret);
+	//	g_debug("command_process_list: command returned %i", ret);
 		if (ret != COMMAND_RETURN_OK || client_is_expired(client))
 			break;
 		else if (list_ok)
@@ -76,8 +76,8 @@ client_process_line(struct client *client, char *line)
 
 	if (client->cmd_list_OK >= 0) {
 		if (strcmp(line, CLIENT_LIST_MODE_END) == 0) {
-			g_debug("[%u] process command list",
-				client->num);
+		//	g_debug("[%u] process command list",
+		//		client->num);
 
 			/* for scalability reasons, we have prepended
 			   each new command; now we have to reverse it
@@ -87,8 +87,8 @@ client_process_line(struct client *client, char *line)
 			ret = client_process_command_list(client,
 							  client->cmd_list_OK,
 							  client->cmd_list);
-			g_debug("[%u] process command "
-				"list returned %i", client->num, ret);
+		//	g_debug("[%u] process command "
+		//		"list returned %i", client->num, ret);
 
 			if (ret == COMMAND_RETURN_CLOSE ||
 			    client_is_expired(client))
@@ -125,11 +125,11 @@ client_process_line(struct client *client, char *line)
 			client->cmd_list_OK = 1;
 			ret = COMMAND_RETURN_OK;
 		} else {
-			g_debug("[%u] process command \"%s\"",
-				client->num, line);
+		//	g_debug("[%u] process command \"%s\"",
+		//		client->num, line);
 			ret = command_process(client, 0, line);
-			g_debug("[%u] command returned %i",
-				client->num, ret);
+		//	g_debug("[%u] command returned %i",
+		//		client->num, ret);
 
 			if (ret == COMMAND_RETURN_CLOSE ||
 			    client_is_expired(client))

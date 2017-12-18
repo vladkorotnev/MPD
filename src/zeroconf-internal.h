@@ -21,7 +21,12 @@
 #define ZEROCONF_INTERNAL_H
 
 /* The dns-sd service type qualifier to publish */
+#ifdef WIDEA_ID
+#define SERVICE_TYPE		"_aurender._tcp"
+#else
 #define SERVICE_TYPE		"_mpd._tcp"
+#endif
+
 
 void init_avahi(const char *service_name);
 

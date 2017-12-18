@@ -24,6 +24,9 @@
 #include <glib.h>
 
 #define CONF_MUSIC_DIR                  "music_directory"
+#ifdef SSD_CACHE
+#define CONF_CACHE_DIR                  "cache_dir"
+#endif
 #define CONF_PLAYLIST_DIR               "playlist_directory"
 #define CONF_FOLLOW_INSIDE_SYMLINKS     "follow_inside_symlinks"
 #define CONF_FOLLOW_OUTSIDE_SYMLINKS    "follow_outside_symlinks"

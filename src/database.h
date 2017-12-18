@@ -82,6 +82,7 @@ db_load(GError **error);
 time_t
 db_get_mtime(void);
 
+bool save_tempdb();
 /**
  * Returns true if there is a valid database file on the disk.
  */

@@ -86,8 +86,10 @@ client_read(struct client *client)
 		return COMMAND_RETURN_CLOSE;
 	}
 
+
 	status = g_io_channel_read_chars(client->channel, p, max_length,
 					 &bytes_read, &error);
+//	g_message("Read[%d][%s]", status, p);
 	switch (status) {
 	case G_IO_STATUS_NORMAL:
 		return client_input_received(client, bytes_read);

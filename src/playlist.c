@@ -17,6 +17,10 @@
  * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
  */
 
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+
 #include "config.h"
 #include "playlist_internal.h"
 #include "playlist_save.h"
@@ -27,13 +31,21 @@
 #include "conf.h"
 #include "stored_playlist.h"
 #include "idle.h"
-
+#include "path.h"
+#include "mapper.h"
 #include <glib.h>
 
 #include <assert.h>
 
+#include "event_pipe.h"
+
 #undef G_LOG_DOMAIN
 #define G_LOG_DOMAIN "playlist"
+
+#include "au_pl_task.h"
+#include "austream.h"
+
+int austrem_skip_tag = 0;
 
 void
 playlist_increment_version_all(struct playlist *playlist)
@@ -71,6 +83,7 @@ playlist_finish(struct playlist *playlist)
 	queue_finish(&playlist->queue);
 }
 
+extern bool g_cache_disabled;
 /**
  * Queue a song, addressed by its order number.
  */
@@ -79,6 +92,9 @@ playlist_queue_song_order(struct playlist *playlist, struct player_control *pc,
 			  unsigned order)
 {
 	struct song *song;
+#ifdef SSD_CACHE
+	char cacheUri[MPD_PATH_MAX]={0};
+#endif
 	char *uri;
 
 	assert(queue_valid_order(&playlist->queue, order));
@@ -88,6 +104,24 @@ playlist_queue_song_order(struct playlist *playlist, struct player_control *pc,
 	song = queue_get_order(&playlist->queue, order);
 	uri = song_get_uri(song);
 	g_debug("queue song %i:\"%s\"", playlist->queued, uri);
+	
+#ifdef SSD_CACHE
+	if(!g_cache_disabled){
+		mapper_get_cache_url(uri,cacheUri);
+		//try cached file first
+		if(isCacheOK(cacheUri)&&(verifyCache(uri,cacheUri)==true))
+		{ 		
+			g_debug("Cache Existed,will update fifo when play the song");
+		}
+		else
+		{
+			cacheNotExisted(cacheUri); 
+		}
+	}
+	if(is_tidal(uri))
+		austrem_skip_tag = 0;
+#endif
+
 	g_free(uri);
 
 	pc_enqueue_song(pc, song);
@@ -106,6 +140,7 @@ playlist_song_started(struct playlist *playlist, struct player_control *pc)
 	   and notify the clients */
 
 	int current = playlist->current;
+	struct song *song;
 	playlist->current = playlist->queued;
 	playlist->queued = -1;
 
@@ -114,10 +149,14 @@ playlist_song_started(struct playlist *playlist, struct player_control *pc)
 		pc_set_pause(pc, true);
 	}
 
+	song = queue_get_order(&playlist->queue, playlist->current);
 	if(playlist->queue.consume)
-		playlist_delete(playlist, pc,
-				queue_order_to_position(&playlist->queue,
-							current));
+	{
+		if(au_pl_task_active==1)
+			g_message("[playlist_song_started] refuse playlist_delete at consume mode\n");
+		else		
+			playlist_delete(playlist, pc, queue_order_to_position(&playlist->queue,current));
+	}
 
 	idle_add(IDLE_PLAYER);
 }
@@ -193,16 +232,71 @@ playlist_play_order(struct playlist *playlist, struct player_control *pc,
 {
 	struct song *song;
 	char *uri;
+	int fd;
 
+	song = queue_get_order(&playlist->queue, orderNum);
+	uri = song_get_uri(song);
+
+	// '16.01.07 Dubby : Check if stream service available.
+	if(is_tidal(uri) && (au_stream_serviceReady == 0)) return;
+	
 	playlist->playing = true;
 	playlist->queued = -1;
 
-	song = queue_get_order(&playlist->queue, orderNum);
 
-	uri = song_get_uri(song);
-	g_debug("play %i:\"%s\"", orderNum, uri);
+#ifdef SSD_CACHE
+        restartAirport();
+#endif
+	g_message("[playlist_play_order] ===> [%d]\n", orderNum);
+
+	if(is_tidal(uri))
+	{
+		int res;
+		res = au_stream_get_tag(uri);
+
+		if(res == 0)
+		{
+			austrem_skip_tag = 1;
+			event_pipe_emit(PIPE_EVENT_TAG);
+		}
+		else
+		{
+			g_message("[playlist_play_order] ===> [%d] url get fail\n", orderNum);
+			switch(is_tidal(uri))
+			{
+				case 1:
+					fd = open(WIMP_FORCELOGIN ,O_CREAT | O_RDWR, 0644);
+					close(fd);
+					break;
+				case 2:
+					fd = open(QOBUZ_FORCELOGIN ,O_CREAT | O_RDWR, 0644);
+					close(fd);					
+					break;
+				case 3:
+					fd = open(BUGS_FORCELOGIN ,O_CREAT | O_RDWR, 0644);
+					close(fd);					
+					break;
+				default:
+					break;
+			}			
+			austrem_skip_tag = 0;
+		}
+	}
+	
 	g_free(uri);
-
+	
+    if(is_audio_mode_enabled())
+    {
+        AMOLED_on_delay_off(); //for when mpd start up and auto play with AMOLED OFF mode (without external cmd)
+    }
+	
+	if(au_pl_task_active==1 && orderNum!=0)
+	{		
+		g_message("[playlist_play_order] [%d/%d] update song\n", orderNum, queue_length(&playlist->queue));
+		playlist_queue_song_order(playlist, pc, orderNum);
+		
+	}
+	
 	pc_play(pc, song);
 	playlist->current = orderNum;
 }
@@ -228,11 +322,15 @@ playlist_sync(struct playlist *playlist, struct player_control *pc)
 	player_unlock(pc);
 
 	if (pc_state == PLAYER_STATE_STOP)
+	{
 		/* the player thread has stopped: check if playback
 		   should be restarted with the next song.  That can
 		   happen if the playlist isn't filling the queue fast
 		   enough */
-		playlist_resume_playback(playlist, pc);
+
+			playlist_resume_playback(playlist, pc);
+
+	}
 	else {
 		/* check if the player thread has already started
 		   playing the queued song */
@@ -243,6 +341,7 @@ playlist_sync(struct playlist *playlist, struct player_control *pc)
 		   possible) */
 		if (pc->next_song == NULL && playlist->queued < 0)
 			playlist_update_queued_song(playlist, pc, NULL);
+
 	}
 }
 
@@ -259,6 +358,7 @@ playlist_resume_playback(struct playlist *playlist, struct player_control *pc)
 	assert(pc_get_state(pc) == PLAYER_STATE_STOP);
 
 	error = pc_get_error(pc);
+
 	if (error == PLAYER_ERROR_NOERROR)
 		playlist->error_count = 0;
 	else
@@ -443,3 +543,5 @@ playlist_get_song_id(const struct playlist *playlist, unsigned song)
 {
 	return queue_position_to_id(&playlist->queue, song);
 }
+
+

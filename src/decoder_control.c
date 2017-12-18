@@ -71,6 +71,7 @@ static void
 dc_command_locked(struct decoder_control *dc, enum decoder_command cmd)
 {
 	dc->command = cmd;
+	g_debug("dc signal from dc_command_locked");
 	decoder_signal(dc);
 	dc_command_wait_locked(dc);
 }
@@ -89,6 +90,7 @@ dc_command_async(struct decoder_control *dc, enum decoder_command cmd)
 	decoder_lock(dc);
 
 	dc->command = cmd;
+	g_debug("dc signal from dc_command_async");
 	decoder_signal(dc);
 
 	decoder_unlock(dc);
@@ -102,7 +104,7 @@ dc_start(struct decoder_control *dc, struct song *song,
 	assert(buffer != NULL);
 	assert(pipe != NULL);
 	assert(music_pipe_empty(pipe));
-
+	//g_debug("*******dc_start:%s",song_get_uri(song));
 	dc->song = song;
 	dc->buffer = buffer;
 	dc->pipe = pipe;
@@ -113,7 +115,6 @@ void
 dc_stop(struct decoder_control *dc)
 {
 	decoder_lock(dc);
-
 	if (dc->command != DECODE_COMMAND_NONE)
 		/* Attempt to cancel the current command.  If it's too
 		   late and the decoder thread is already executing
@@ -123,7 +124,6 @@ dc_stop(struct decoder_control *dc)
 
 	if (dc->state != DECODE_STATE_STOP && dc->state != DECODE_STATE_ERROR)
 		dc_command_locked(dc, DECODE_COMMAND_STOP);
-
 	decoder_unlock(dc);
 }
 

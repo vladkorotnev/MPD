@@ -56,7 +56,7 @@ input_file_open(const char *filename,
 
 	if (!g_path_is_absolute(filename))
 		return NULL;
-
+        //g_message("OPEN %s",filename);
 	fd = open_cloexec(filename, O_RDONLY|O_BINARY, 0);
 	if (fd < 0) {
 		if (errno != ENOENT && errno != ENOTDIR)
@@ -116,15 +116,27 @@ input_file_seek(struct input_stream *is, goffset offset, int whence,
 	return true;
 }
 
+#ifdef SSD_CACHE
+#include "mapper.h"
+#include <sys/time.h>
+#endif
+
+extern bool g_cache_disabled;
 static size_t
 input_file_read(struct input_stream *is, void *ptr, size_t size,
 		GError **error_r)
 {
 	struct file_input_stream *fis = (struct file_input_stream *)is;
 	ssize_t nbytes;
-
-	nbytes = read(fis->fd, ptr, size);
-	if (nbytes < 0) {
+#ifdef SSD_CACHE
+        if(g_cache_disabled)
+            nbytes = read(fis->fd, ptr, size);
+        else
+            nbytes = wl_buffer_read(fis->fd,is->offset,ptr,size);
+#else
+    nbytes = read(fis->fd, ptr, size);
+#endif
+    if (nbytes < 0) {
 		g_set_error(error_r, file_quark(), errno,
 			    "Failed to read: %s", g_strerror(errno));
 		return 0;
@@ -138,7 +150,8 @@ static void
 input_file_close(struct input_stream *is)
 {
 	struct file_input_stream *fis = (struct file_input_stream *)is;
-
+        wl_buffer_clear();
+        unmark_ssd_reading();
 	close(fis->fd);
 	input_stream_deinit(&fis->base);
 	g_free(fis);

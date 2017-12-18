@@ -63,12 +63,16 @@ audio_format_init_checked(struct audio_format *af, unsigned long sample_rate,
 			  enum sample_format sample_format, unsigned channels,
 			  GError **error_r)
 {
+	bool ret = false;
 	if (audio_check_sample_rate(sample_rate, error_r) &&
 	    audio_check_sample_format(sample_format, error_r) &&
 	    audio_check_channel_count(channels, error_r)) {
 		audio_format_init(af, sample_rate, sample_format, channels);
 		assert(audio_format_valid(af));
-		return true;
+		ret = true;
 	} else
-		return false;
+		ret = false;
+	if(ret == false)
+		g_debug("Fail audio_format_init_check");
+	return ret;
 }

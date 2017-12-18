@@ -334,6 +334,67 @@ alsa_output_setup_format(snd_pcm_t *pcm, snd_pcm_hw_params_t *hwparams,
 	return -EINVAL;
 }
 
+//find proper rate to downsample, if not necessary, return 0 then we will fall back to the old way
+//int WL_SR[6]={44,48,88,96,176,192};
+int WL_SR[8]={44,48,88,96,176,192,352,384};
+//int WL_SR0[6]={44100,48000,88200,96000,176400,192000};
+int WL_SR0[8]={44100,48000,88200,96000,176400,192000,352800,384000};
+int is_same_group(int sr1, int sr2)
+{
+    int id1,id2;
+    id1 = id2 = -1;
+    for(int i = 0; i < 8; i++)
+    {
+        if(WL_SR[i]==sr1)
+            id1 = i;
+        if(WL_SR[i]==sr2)
+            id2 = i;
+    }
+    g_debug("%d:%d--%d:%d",sr1,sr2,id1,id2);
+    return id1%2 == id2%2;
+}
+int proper_rate_id(int request,int max)
+{
+    int i = 0;
+    for(i = 0; i < 8; i++)
+    {
+        if(WL_SR[i] == request)
+            break;
+    }
+    if(i == 6)
+        return -1; //not a sample rate we care about, fall back to old way
+    if(request<=max)
+        return -1; //upsample seems ok for underrun, however, if we downsample 88.2 to 44.1(88.2 not supported by dac), it happens.
+    if(is_same_group(request,max))
+        return -1; //will be ok to use max sr
+    if(i - 2 >=0 && WL_SR[i-2] < max)
+        return i-2;//WL_SR0[i-2];
+    if(i - 4 >=0 && WL_SR[i-4] < max)
+        return i-4;//WL_SR0[i-4];
+    return -1;
+}
+
+//add this function because alsa lib's get max rate sometime returns 0
+int max_external_rate()
+{
+    //system("cat /proc/asound/card1/stream0|grep Rates|awk -F, '{print $NF}'|head -n1 > /tmp/.maxextsr");
+    system("/usr/local/sbin/maxExtRate > /tmp/.maxextsr");
+    int sfile = open("/tmp/.maxextsr",O_RDONLY);
+    if(sfile < 0)
+        return 0;
+    else
+        {
+            char buff[64]={0};
+            if(read(sfile,buff,64)>0)
+            {
+                return atoi(buff);
+            }
+            else
+                return 0;
+        }
+    return 0;
+}
+
 /**
  * Set up the snd_pcm_t object which was opened by the caller.  Set up
  * the configured settings and the audio format.
@@ -404,15 +465,62 @@ configure_hw:
 		return false;
 	}
 	audio_format->channels = (int8_t)channels;
+#if 0
+        if(strcmp(alsa_device(ad),"plughw:1,0") == 0)
+        {
+            int maxsr = max_external_rate();
+            maxsr = maxsr/1000;
+            int srid = proper_rate_id((audio_format->sample_rate)/1000,maxsr);
+            //g_debug(">>set up Alsa device %s with sr %u Hz for %u Hz of MAX:%ukHz<<\n",
+            //        alsa_device(ad), WL_SR0[srid],audio_format->sample_rate,maxsr);
+            if(maxsr == 0 || srid == -1)
+            {
+                err = snd_pcm_hw_params_set_rate_near(ad->pcm, hwparams,
+                                                      &sample_rate, NULL);
+            }
+            else
+            {
+                //find proper sample rate to downsample
+                g_debug(">>set up Alsa device %s with sr %u Hz for %u Hz of MAX:%ukHz<<\n",
+                        alsa_device(ad), WL_SR0[srid],audio_format->sample_rate,maxsr);
 
-	err = snd_pcm_hw_params_set_rate_near(ad->pcm, hwparams,
-					      &sample_rate, NULL);
+                err = snd_pcm_hw_params_set_rate(ad->pcm, hwparams,
+                                             WL_SR0[srid], NULL);
+                if(err < 0)
+                 {
+                     //best fall back match may not be support by the dac, try the the 2nd best
+                     g_debug("Tried %d failed, device may not support it",WL_SR0[srid]);
+                     srid -= 2;
+                     if(srid>=0)
+                         err = snd_pcm_hw_params_set_rate(ad->pcm, hwparams,
+                                                          WL_SR0[srid], NULL);
+                     if(err < 0)
+                     {
+                         g_debug("Set %d failed",WL_SR0[srid]);
+                         err = snd_pcm_hw_params_set_rate_near(ad->pcm, hwparams,
+                                                               &sample_rate, NULL);
+                     }
+                     else
+                     {
+                         sample_rate = WL_SR0[srid];
+                         g_debug("Downsampled to sr:%d:%d",sample_rate,err);
+                     }
+                 }
+            }
+        }
+        else
+#endif
+        {
+            err = snd_pcm_hw_params_set_rate_near(ad->pcm, hwparams,
+                                                  &sample_rate, NULL);
+        }
 	if (err < 0 || sample_rate == 0) {
 		g_set_error(error, alsa_output_quark(), err,
 			    "ALSA device \"%s\" does not support %u Hz audio",
 			    alsa_device(ad), audio_format->sample_rate);
 		return false;
 	}
+
 	audio_format->sample_rate = sample_rate;
 
 	snd_pcm_uframes_t buffer_size_min, buffer_size_max;
@@ -450,7 +558,8 @@ configure_hw:
 	}
 
 	if (period_time_ro == 0 && buffer_time >= 10000) {
-		period_time_ro = period_time = buffer_time / 4;
+		//period_time_ro = period_time = buffer_time / 4;
+		period_time_ro = period_time = buffer_time / 3; //by Eric
 
 		g_debug("default period_time = buffer_time/4 = %u/4 = %u",
 			buffer_time, period_time);
@@ -541,13 +650,12 @@ alsa_open(struct audio_output *ao, struct audio_format *audio_format, GError **e
 	struct alsa_data *ad = (struct alsa_data *)ao;
 	int err;
 	bool success;
-
 	err = snd_pcm_open(&ad->pcm, alsa_device(ad),
 			   SND_PCM_STREAM_PLAYBACK, ad->mode);
 	if (err < 0) {
-		g_set_error(error, alsa_output_quark(), err,
-			    "Failed to open ALSA device \"%s\": %s",
-			    alsa_device(ad), snd_strerror(err));
+	  g_set_error(error, alsa_output_quark(), err,
+		      "Failed to open ALSA device \"%s\": %s",
+		      alsa_device(ad), snd_strerror(err));
 		return false;
 	}
 
@@ -566,7 +674,9 @@ static int
 alsa_recover(struct alsa_data *ad, int err)
 {
 	if (err == -EPIPE) {
-		g_debug("Underrun on ALSA device \"%s\"\n", alsa_device(ad));
+		g_warning("Underrun on ALSA device \"%s\"\n", alsa_device(ad));
+                //system("killall fifoManager");
+                //exit(0);
 	} else if (err == -ESTRPIPE) {
 		g_debug("ALSA device \"%s\" was suspended\n", alsa_device(ad));
 	}
@@ -589,8 +699,18 @@ alsa_recover(struct alsa_data *ad, int err)
 		break;
 	/* this is no error, so just keep running */
 	case SND_PCM_STATE_RUNNING:
+#if 0
 		err = 0;
 		break;
+#else
+	//leo avoid repeating.
+		g_debug("state_running %d",err);
+                ad->period_position = 0;
+                err = snd_pcm_prepare(ad->pcm);
+		g_debug("pcm_prepare %d",err);
+		system("echo \"sleep 5;/usr/bin/mpc --port 12019 play\">/tmp/.replay;bash /tmp/.replay &");
+		return err;
+#endif
 	default:
 		/* unknown state, do nothing */
 		break;
@@ -660,6 +780,8 @@ alsa_play(struct audio_output *ao, const void *chunk, size_t size,
 	size /= ad->frame_size;
 
 	while (true) {
+	  //g_message(".....");
+	  //usleep(2000);
 		snd_pcm_sframes_t ret = ad->writei(ad->pcm, chunk, size);
 		if (ret > 0) {
 			ad->period_position = (ad->period_position + ret)

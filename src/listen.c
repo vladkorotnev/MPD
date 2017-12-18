@@ -31,7 +31,11 @@
 #undef G_LOG_DOMAIN
 #define G_LOG_DOMAIN "listen"
 
+#ifdef WIDEA_ID
+#define DEFAULT_PORT	12019
+#else
 #define DEFAULT_PORT	6600
+#endif
 
 static struct server_socket *listen_socket;
 int listen_port;

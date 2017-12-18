@@ -202,6 +202,7 @@ simple_db_open(struct db *_db, G_GNUC_UNUSED GError **error_r)
 	db->root = directory_new("", NULL);
 	db->mtime = 0;
 
+#ifdef ORG
 	GError *error = NULL;
 	if (!simple_db_load(db, &error)) {
 		directory_free(db->root);
@@ -214,6 +215,7 @@ simple_db_open(struct db *_db, G_GNUC_UNUSED GError **error_r)
 
 		db->root = directory_new("", NULL);
 	}
+#endif
 
 	return true;
 }
@@ -248,6 +250,7 @@ simple_db_visit(struct db *_db, const struct db_selection *selection,
 		const struct db_visitor *visitor, void *ctx,
 		GError **error_r)
 {
+#ifdef ORG
 	const struct simple_db *db = (const struct simple_db *)_db;
 	const struct directory *directory =
 		simple_db_lookup_directory(db, selection->uri);
@@ -268,6 +271,9 @@ simple_db_visit(struct db *_db, const struct db_selection *selection,
 
 	return directory_walk(directory, selection->recursive,
 			      visitor, ctx, error_r);
+#else
+    return true;
+#endif
 }
 
 const struct db_plugin simple_db_plugin = {
@@ -300,10 +306,10 @@ simple_db_save(struct db *_db, GError **error_r)
 	g_debug("removing empty directories from DB");
 	directory_prune_empty(music_root);
 
-	g_debug("sorting DB");
-
+	g_debug("skip sorting DB");
+	/*
 	directory_sort(music_root);
-
+	*/
 	g_debug("writing DB");
 
 	FILE *fp = fopen(db->path, "w");

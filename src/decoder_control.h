@@ -41,6 +41,12 @@ enum decoder_state {
 	DECODE_STATE_ERROR,
 };
 
+enum dsd_type {
+    DSD_TYPE_NONE = 0,
+    DSD_TYPE_64   = 1,
+    DSD_TYPE_128  = 2,
+};
+
 struct decoder_control {
 	/** the handle of the decoder thread, or NULL if the decoder
 	    thread isn't running */
@@ -101,6 +107,8 @@ struct decoder_control {
 	char *mixramp_start;
 	char *mixramp_end;
 	char *mixramp_prev_end;
+
+    enum dsd_type isDSD;
 };
 
 G_GNUC_MALLOC

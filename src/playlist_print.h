@@ -84,6 +84,14 @@ playlist_print_changes_info(struct client *client,
 			    uint32_t version);
 
 /**
+ * Print simple changes since the specified playlist version.
+ */
+void
+playlist_print_changes_info_wl(struct client *client,
+			    const struct playlist *playlist,
+			    uint32_t version);
+
+/**
  * Print changes since the specified playlist version, position only.
  */
 void

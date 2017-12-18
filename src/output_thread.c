@@ -40,6 +40,9 @@
 #undef G_LOG_DOMAIN
 #define G_LOG_DOMAIN "output"
 
+extern int g_sample_rate;
+
+
 static void ao_command_finished(struct audio_output *ao)
 {
 	assert(ao->command != AO_COMMAND_NONE);
@@ -128,6 +131,9 @@ ao_filter_close(struct audio_output *ao)
 	filter_close(ao->filter);
 }
 
+static int disabled_output;
+extern int g_not_supports_over_192;
+
 static void
 ao_open(struct audio_output *ao)
 {
@@ -151,13 +157,11 @@ ao_open(struct audio_output *ao)
 	}
 
 	/* enable the device (just in case the last enable has failed) */
-
 	if (!ao_enable(ao))
 		/* still no luck */
 		return;
 
 	/* open the filter */
-
 	filter_audio_format = ao_filter_open(ao, &ao->in_audio_format, &error);
 	if (filter_audio_format == NULL) {
 		g_warning("Failed to open filter for \"%s\" [%s]: %s",
@@ -167,21 +171,81 @@ ao_open(struct audio_output *ao)
 		ao->fail_timer = g_timer_new();
 		return;
 	}
-
 	assert(audio_format_valid(filter_audio_format));
 
 	ao->out_audio_format = *filter_audio_format;
 	audio_format_mask_apply(&ao->out_audio_format,
 				&ao->config_audio_format);
-
 	g_mutex_unlock(ao->mutex);
+	const struct audio_format *laf = &ao->out_audio_format;
+        /*
+               when sample rate is cleared due to pause/stop(for airplay), 
+               we update the current sample rate from blaster
+               so we only send this stop cmd(which is for avoid tick when change rate) only when necessary
+        */
+
+	if( g_not_supports_over_192  && laf->sample_rate>192000)
+	{
+		g_message("===> audio_output_disable_AU [%d]\n", laf->sample_rate);
+		audio_output_disable_AU(0);
+		disabled_output=1;
+	}
+
+	if(disabled_output==1 && laf->sample_rate <= 192000)
+	{
+		g_message("===> audio_output_enable_AU [%d]\n", laf->sample_rate);
+		audio_output_enable_AU(0);
+		disabled_output=0;	
+	}		
+    //g_message("[ao_open] g_sample_rate=%d laf->sample_rate=%d ao->name=[%s]", g_sample_rate, laf->sample_rate, ao->name);
+	if(g_sample_rate != laf->sample_rate && strcmp(ao->name,"Digital")==0)
+            {
+#if 1
+                time_t rawtime;
+                struct tm * timeinfo;
+                char t[64]={0};
+                int sr = 0;
+                if(g_sample_rate == 0)
+                    sr = get_blaster_sr();
+                if(sr == laf->sample_rate)
+                    {
+                        g_debug("Blaster's sample rate matches request, skip e cmd and tick wait:%d | %d",sr,laf->sample_rate);
+                    }
+                else
+                    {
+                        time ( &rawtime );
+                        timeinfo = localtime ( &rawtime );
+                        strftime(t,64,"[%Y-%m-%d %X]",timeinfo);
+                        g_debug("########Now Sending Stop cmd : %s########:%u\n",t,laf->sample_rate);
+#endif
+
+                        if(send_blaster_stop_cmd(laf->sample_rate, 0)==false)
+                            {
+                                g_warning("Fail to send stop command");
+                            }
+                        else
+                            {
+#if 0
+                                time ( &rawtime );
+                                timeinfo = localtime ( &rawtime );
+                                strftime(t,64,"[%Y-%m-%d %X]",timeinfo);
+                                g_debug("#########Stop cmd sent at %s, now wait 2.5s##########\n",t);
+                                usleep(2500000);
+                                time ( &rawtime );
+                                timeinfo = localtime ( &rawtime );
+                                strftime(t,64,"[%Y-%m-%d %X]",timeinfo);
+                                g_debug("######Waited, Now : %s#######\n",t);
+#endif
+                            }
+                    }
+            }
 	success = ao_plugin_open(ao, &ao->out_audio_format, &error);
 	g_mutex_lock(ao->mutex);
 
 	assert(!ao->open);
 
 	if (!success) {
-		g_warning("Failed to open \"%s\" [%s]: %s",
+		g_debug("Failed to open \"%s\" [%s]: %s",
 			  ao->name, ao->plugin->name, error->message);
 		g_error_free(error);
 
@@ -572,7 +636,6 @@ static gpointer audio_output_task(gpointer arg)
 	struct audio_output *ao = arg;
 
 	g_mutex_lock(ao->mutex);
-
 	while (1) {
 		switch (ao->command) {
 		case AO_COMMAND_NONE:

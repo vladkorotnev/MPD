@@ -53,7 +53,11 @@
 #undef G_LOG_DOMAIN
 #define G_LOG_DOMAIN "listen"
 
+#ifdef WIDEA_ID
+#define DEFAULT_PORT	12019
+#else
 #define DEFAULT_PORT	6600
+#endif
 
 struct one_socket {
 	struct one_socket *next;

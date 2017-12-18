@@ -137,6 +137,8 @@ audio_output_all_wait(struct player_control *pc, unsigned threshold);
 void
 audio_output_all_pause(void);
 
+void audio_output_all_pause_no_clear(void);
+
 /**
  * Drain all audio outputs.
  */

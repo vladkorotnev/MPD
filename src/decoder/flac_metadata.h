@@ -20,6 +20,7 @@
 #ifndef MPD_FLAC_METADATA_H
 #define MPD_FLAC_METADATA_H
 
+
 #include <assert.h>
 #include <stdbool.h>
 #include <FLAC/metadata.h>
@@ -31,7 +32,6 @@ static inline unsigned
 flac_duration(const FLAC__StreamMetadata_StreamInfo *stream_info)
 {
 	assert(stream_info->sample_rate > 0);
-
 	return (stream_info->total_samples + stream_info->sample_rate - 1) /
 		stream_info->sample_rate;
 }

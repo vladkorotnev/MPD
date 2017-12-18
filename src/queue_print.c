@@ -47,6 +47,15 @@ queue_print_song_info(struct client *client, const struct queue *queue,
 		client_printf(client, "Prio: %u\n", priority);
 }
 
+static void
+queue_print_song_info_wl(struct client *client, const struct queue *queue,
+		      unsigned position)
+{
+	song_print_uri(client, queue_get(queue, position));
+	client_printf(client, "Pos: %u\nId: %u\n",
+		      position, queue_position_to_id(queue, position));
+}
+
 void
 queue_print_info(struct client *client, const struct queue *queue,
 		 unsigned start, unsigned end)
@@ -78,6 +87,16 @@ queue_print_changes_info(struct client *client, const struct queue *queue,
 	for (unsigned i = 0; i < queue_length(queue); i++) {
 		if (queue_song_newer(queue, i, version))
 			queue_print_song_info(client, queue, i);
+	}
+}
+
+void
+queue_print_changes_info_wl(struct client *client, const struct queue *queue,
+			 uint32_t version)
+{
+	for (unsigned i = 0; i < queue_length(queue); i++) {
+		if (queue_song_newer(queue, i, version))
+			queue_print_song_info_wl(client, queue, i);
 	}
 }
 

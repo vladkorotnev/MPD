@@ -1,0 +1,1 @@
+packFiles="src/mpd wimp/libwimp.so.1.0 dpkg/* mms/libmms.so.0.0.2_13.10  mms/libmms.so.0.0.2_10.04 flac/libFLAC.so.8.3.0"

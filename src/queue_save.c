@@ -24,7 +24,7 @@
 #include "uri.h"
 #include "database.h"
 #include "song_save.h"
-
+#include "mapper.h"
 #include <stdlib.h>
 
 static void
@@ -97,10 +97,24 @@ queue_load_song(FILE *fp, GString *buffer, const char *line,
 
 		line = endptr + 1;
 
+                if (is_nas_lnk(line))
+                    {
+                        g_debug("Ignore NAS LINK:%s",line);
+                        return;
+                    }
+                if(!isStateFileRegularAndReadable(line))
+                {
+                    g_debug("File does not exist any more, skip %s",line);
+                    return;
+                }
 		song = get_song(line);
 		if (song == NULL)
 			return;
 	}
+	
+#ifdef SSD_CACHE
+	addToCache(song_get_uri(song));
+#endif
 
 	queue_append(queue, song);
 }

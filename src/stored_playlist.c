@@ -250,6 +250,7 @@ spl_load(const char *utf8path, GError **error_r)
 	GPtrArray *list;
 	char *path_fs;
 
+
 	if (spl_map(error_r) == NULL)
 		return NULL;
 
@@ -498,6 +499,15 @@ spl_append_uri(const char *url, const char *utf8file, GError **error_r)
 
 		return spl_append_song(utf8file, song, error_r);
 	}
+}
+
+// '15.01.29 Dubby add song's to playlist without db.
+bool
+spl_append_file(const char *url, const char *utf8file, GError **error_r)
+{
+	struct song *song;
+	song = song_file_new(url, NULL);
+	return spl_append_song(utf8file, song, error_r);
 }
 
 static bool

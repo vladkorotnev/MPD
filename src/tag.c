@@ -510,10 +510,6 @@ tag_add_item_internal(struct tag *tag, enum tag_type type,
 void tag_add_item_n(struct tag *tag, enum tag_type type,
 		    const char *value, size_t len)
 {
-	if (ignore_tag_items[type])
-	{
-		return;
-	}
 	if (!value || !len)
 		return;
 

@@ -31,6 +31,9 @@ struct song {
 	struct tag *tag;
 	struct directory *parent;
 	time_t mtime;
+#ifdef FILESIZE	
+	size_t size;
+#endif
 
 	/**
 	 * Start of this sub-song within the file in milliseconds.

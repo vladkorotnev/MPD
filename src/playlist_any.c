@@ -65,7 +65,14 @@ struct playlist_provider *
 playlist_open_any(const char *uri, GMutex *mutex, GCond *cond,
 		  struct input_stream **is_r)
 {
+#ifdef ORG
 	return uri_has_scheme(uri)
 		? playlist_open_remote(uri, mutex, cond, is_r)
 		: playlist_mapper_open(uri, mutex, cond, is_r);
+#else
+	return uri_has_scheme(uri)
+		? playlist_open_remote(uri, mutex, cond, is_r)
+		: playlist_mapper_open(uri, mutex, cond, is_r);
+//    return playlist_mapper_open(uri, mutex, cond, is_r);
+#endif
 }

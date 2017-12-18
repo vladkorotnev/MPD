@@ -233,6 +233,9 @@ pcm_mix(void *buffer1, const void *buffer2, size_t size,
 
 	vol1 = s * PCM_VOLUME_1 + 0.5;
 	vol1 = vol1 > PCM_VOLUME_1 ? PCM_VOLUME_1 : (vol1 < 0 ? 0 : vol1);
-
+#ifdef WIDEA_FADING
+	pcm_add_vol(buffer1, buffer2, size, vol1, PCM_VOLUME_1, format);
+#else
 	pcm_add_vol(buffer1, buffer2, size, vol1, PCM_VOLUME_1 - vol1, format);
+#endif	
 }

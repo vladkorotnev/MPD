@@ -100,6 +100,9 @@ playlist_get_queue(const struct playlist *playlist)
 void
 playlist_clear(struct playlist *playlist, struct player_control *pc);
 
+void
+playlist_clearExceptPlaying(struct playlist *playlist, struct player_control *pc);
+
 #ifndef WIN32
 /**
  * Appends a local file (outside the music database) to the playlist,

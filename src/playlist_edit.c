@@ -36,6 +36,11 @@
 #include <unistd.h>
 #include <stdlib.h>
 
+#ifdef SSD_CACHE
+#include "path.h"
+extern bool g_cache_disabled;
+#endif
+
 static void playlist_increment_version(struct playlist *playlist)
 {
 	queue_increment_version(&playlist->queue);
@@ -72,6 +77,7 @@ playlist_append_file(struct playlist *playlist, struct player_control *pc,
 	struct stat st;
 	struct song *song;
 
+#ifdef ORG
 	if (uid <= 0)
 		/* unauthenticated client */
 		return PLAYLIST_RESULT_DENIED;
@@ -83,6 +89,32 @@ playlist_append_file(struct playlist *playlist, struct player_control *pc,
 	if (st.st_uid != (uid_t)uid && (st.st_mode & 0444) != 0444)
 		/* client is not owner */
 		return PLAYLIST_RESULT_DENIED;
+#else
+  #ifdef SSD_CACHE
+    if(g_cache_disabled){
+        ret = stat(path, &st);
+        if (ret < 0)
+            return PLAYLIST_RESULT_ERRNO;
+    }
+    else {
+        char cacheUri[MPD_PATH_MAX]={0};
+
+        mapper_get_cache_url(path,cacheUri);
+        if(isCacheOK(cacheUri)&&(verifyCache(path,cacheUri)==true)) {
+            g_message("This file is already in cache so skip stat : %s\n cache file : %s", path, cacheUri);
+        }
+        else {
+            ret = stat(path, &st);
+            if (ret < 0)
+                return PLAYLIST_RESULT_ERRNO;
+        }
+    }
+  #else
+	ret = stat(path, &st);
+	if (ret < 0)
+		return PLAYLIST_RESULT_ERRNO;
+  #endif
+#endif
 
 	song = song_file_load(path, NULL);
 	if (song == NULL)
@@ -98,10 +130,14 @@ playlist_append_song(struct playlist *playlist, struct player_control *pc,
 {
 	const struct song *queued;
 	unsigned id;
-
+	//when we add a file thru client.
 	if (queue_is_full(&playlist->queue))
 		return PLAYLIST_RESULT_TOO_LARGE;
 
+	//g_debug("AddSongToPl:%s",song_get_uri(song));
+#ifdef SSD_CACHE
+	addToCache(song_get_uri(song));
+#endif
 	queued = playlist_get_queued_song(playlist);
 
 	id = queue_append(&playlist->queue, song);
@@ -135,6 +171,7 @@ song_by_uri(const char *uri)
 {
 	struct song *song;
 
+#ifdef ORG
 	song = db_get_song(uri);
 	if (song != NULL)
 		return song;
@@ -143,6 +180,53 @@ song_by_uri(const char *uri)
 		return song_remote_new(uri);
 
 	return NULL;
+#else
+	int ret = 0;
+	struct stat st;
+	char *path = map_uri_fs(uri);
+	#ifdef SSD_CACHE
+		if(g_cache_disabled){
+			ret = stat(path, &st);
+			if (ret < 0)
+				goto CHECK_URI;
+		}
+		else {
+			char cacheUri[MPD_PATH_MAX]={0};
+
+			mapper_get_cache_url(path, cacheUri);
+			if(isCacheOK(cacheUri) && (verifyCache(path, cacheUri) == true)) {
+				//g_message("x This file is already in cache so skip stat : %s\n cache file : %s", path, cacheUri);
+			}
+		else {
+			ret = stat(path, &st);
+			if (ret < 0)
+				goto CHECK_URI;
+			}
+		}
+	#else
+		ret = stat(path, &st);
+		if (ret < 0)
+			goto CHECK_URI;
+	#endif
+
+	song = song_file_load(path, NULL);
+
+	if (song != NULL) {
+		free(path);
+		return song;
+	}
+
+  CHECK_URI:
+	free(path);
+
+	if (uri_has_scheme(uri)) {
+		song = song_remote_new(uri);
+		return song;
+	}
+
+	return NULL;
+#endif
+
 }
 
 enum playlist_result
@@ -159,6 +243,28 @@ playlist_append_uri(struct playlist *playlist, struct player_control *pc,
 
 	return playlist_append_song(playlist, pc, song, added_id);
 }
+
+#ifdef ORG
+#else
+enum playlist_result
+playlist_append_uri_nodb(struct playlist *playlist, struct player_control *pc,
+            const char *uri, unsigned *added_id)
+{
+    int ret;
+    struct stat st;
+    struct song *song;
+
+    g_debug("add to playlist: %s", uri);
+
+    ret = stat(uri, &st);
+    if (ret < 0)
+        return PLAYLIST_RESULT_NO_SUCH_SONG;
+
+    song = song_file_load(uri, NULL);
+
+    return playlist_append_song(playlist, pc, song, added_id);
+}
+#endif
 
 enum playlist_result
 playlist_swap_songs(struct playlist *playlist, struct player_control *pc,
@@ -311,6 +417,10 @@ playlist_delete_internal(struct playlist *playlist, struct player_control *pc,
 	if (!song_in_database(queue_get(&playlist->queue, song)))
 		pc_song_deleted(pc, queue_get(&playlist->queue, song));
 
+	g_debug("deleteFromPl:%s",song_get_uri(queue_get(&playlist->queue, song)));
+#ifdef SSD_CACHE
+	deleteCache(song_get_uri(queue_get(&playlist->queue, song)));
+#endif
 	queue_delete(&playlist->queue, song);
 
 	/* update the "current" and "queued" variables */
@@ -319,6 +429,31 @@ playlist_delete_internal(struct playlist *playlist, struct player_control *pc,
 		playlist->current--;
 	}
 }
+
+/// By Eric
+void
+playlist_clearExceptPlaying(struct playlist *playlist, struct player_control *pc)
+{
+	/* remove songs after current played song index
+	   then remove 0 till queue count is 1 */
+	const struct song *queued;
+	queued = playlist_get_queued_song(playlist);
+
+	/// delete songs after currently playing
+	for (unsigned i = queue_length(&playlist->queue) - 1 ; i > playlist->current; i--) {
+		playlist_delete_internal(playlist, pc, i, &queued);
+	}
+
+	/// delete songs before currently playing
+	for (unsigned i = 0; queue_length(&playlist->queue) > 1; i++) {
+		playlist_delete_internal(playlist, pc, 0, &queued);
+	}
+
+	playlist_increment_version(playlist);
+	playlist_update_queued_song(playlist, pc, queued);
+}
+/// End of by Eric
+
 
 enum playlist_result
 playlist_delete(struct playlist *playlist, struct player_control *pc,
@@ -397,11 +532,18 @@ playlist_move_range(struct playlist *playlist, struct player_control *pc,
 
 	if (!queue_valid_position(&playlist->queue, start) ||
 		!queue_valid_position(&playlist->queue, end - 1))
+	{
+		g_message("playlist_move_range fail start=[%d] end=[%d] to=[%d] que=[%d]\n", start, end, to, queue_length(&playlist->queue));
 		return PLAYLIST_RESULT_BAD_RANGE;
+	}
 
 	if ((to >= 0 && to + end - start - 1 >= queue_length(&playlist->queue)) ||
 	    (to < 0 && abs(to) > (int)queue_length(&playlist->queue)))
-		return PLAYLIST_RESULT_BAD_RANGE;
+		{
+			g_message("playlist_move_range fail1 start=[%d] end=[%d] to=[%d] que=[%d]\n", start, end, to, queue_length(&playlist->queue));
+			return PLAYLIST_RESULT_BAD_RANGE;
+		}
+
 
 	if ((int)start == to)
 		/* nothing happens */

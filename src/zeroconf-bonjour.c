@@ -60,6 +60,16 @@ bonjour_channel_event(G_GNUC_UNUSED GIOChannel *source,
 
 void init_zeroconf_osx(const char *serviceName)
 {
+#define AURENDER
+#if defined AURENDER
+	DNSServiceErrorType error = DNSServiceRegister(&dnsReference,
+						       0, 0, serviceName,
+						       SERVICE_TYPE, NULL, NULL,
+						       g_htons(80), 0,
+						       NULL,
+						       dnsRegisterCallback,
+						       NULL);
+#else
 	DNSServiceErrorType error = DNSServiceRegister(&dnsReference,
 						       0, 0, serviceName,
 						       SERVICE_TYPE, NULL, NULL,
@@ -67,6 +77,7 @@ void init_zeroconf_osx(const char *serviceName)
 						       NULL,
 						       dnsRegisterCallback,
 						       NULL);
+#endif
 
 	if (error != kDNSServiceErr_NoError) {
 		g_warning("Failed to register zeroconf service.");

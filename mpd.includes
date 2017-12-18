@@ -1,0 +1,14 @@
+/srv/es/aurenderRelease/auMpd
+/srv/es/aurenderRelease/auMpd/src
+/srv/es/aurenderRelease/auMpd/src/archive
+/srv/es/aurenderRelease/auMpd/src/AudioCompress
+/srv/es/aurenderRelease/auMpd/src/cue
+/srv/es/aurenderRelease/auMpd/src/db
+/srv/es/aurenderRelease/auMpd/src/decoder
+/srv/es/aurenderRelease/auMpd/src/dsdnative
+/srv/es/aurenderRelease/auMpd/src/filter
+/srv/es/aurenderRelease/auMpd/src/input
+/srv/es/aurenderRelease/auMpd/src/mixer
+/srv/es/aurenderRelease/auMpd/src/output
+/srv/es/aurenderRelease/auMpd/src/playlist
+/srv/es/aurenderRelease/auMpd/test

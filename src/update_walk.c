@@ -526,6 +526,9 @@ update_container_file(	struct directory* directory,
 
 		// shouldn't be necessary but it's there..
 		song->mtime = st->st_mtime;
+#ifdef FILESIZE
+		song->size = st->st_size;
+#endif
 
 		child_path_fs = map_directory_child_fs(contdir, vtrack);
 
@@ -908,6 +911,7 @@ update_walk(const char *path, bool discard)
 	walk_discard = discard;
 	modified = false;
 
+#ifdef ORG
 	if (path != NULL && !isRootDirectory(path)) {
 		updatePath(path);
 	} else {
@@ -917,6 +921,9 @@ update_walk(const char *path, bool discard)
 		if (stat_directory(directory, &st) == 0)
 			updateDirectory(directory, &st);
 	}
+#else
+    g_warning("We don't use db, so don't need to update_walk");
+#endif
 
 	return modified;
 }

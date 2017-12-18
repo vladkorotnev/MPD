@@ -46,7 +46,12 @@ playlist_print_song(FILE *file, const struct song *song)
 		uri_fs = utf8_to_fs_charset(uri);
 		g_free(uri);
 
+#ifdef ORG
 		fprintf(file, "%s\n", uri_fs);
+#else
+		char *path = map_to_relative_path(uri_fs);
+		fprintf(file, "%s\n", path);
+#endif
 		g_free(uri_fs);
 	}
 }

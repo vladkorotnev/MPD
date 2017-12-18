@@ -376,7 +376,6 @@ decoder_data(struct decoder *decoder,
 			return DECODE_COMMAND_STOP;
 		}
 	}
-
 	while (length > 0) {
 		struct music_chunk *chunk;
 		char *dest;
@@ -384,6 +383,7 @@ decoder_data(struct decoder *decoder,
 		bool full;
 
 		chunk = decoder_get_chunk(decoder);
+
 		if (chunk == NULL) {
 			assert(dc->command != DECODE_COMMAND_NONE);
 			return dc->command;
@@ -400,6 +400,7 @@ decoder_data(struct decoder *decoder,
 			continue;
 		}
 
+		// TODO: this assert make sure the loop will not last forever
 		assert(nbytes > 0);
 
 		if (nbytes > length)
@@ -430,7 +431,7 @@ decoder_data(struct decoder *decoder,
 			   stop decoding */
 			return DECODE_COMMAND_STOP;
 	}
-
+	
 	return DECODE_COMMAND_NONE;
 }
 

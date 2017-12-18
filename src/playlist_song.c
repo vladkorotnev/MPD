@@ -26,6 +26,13 @@
 #include "ls.h"
 #include "tag.h"
 
+#ifdef ORG
+#else
+#include <sys/stat.h>
+#include "path.h"
+extern bool g_cache_disabled;
+#endif
+
 #include <assert.h>
 #include <string.h>
 
@@ -142,6 +149,7 @@ playlist_check_translate_song(struct song *song, const char *base_uri,
 		dest = song_remote_new(uri);
 		g_free(uri);
 	} else {
+#ifdef ORG
 		dest = db_get_song(uri);
 		g_free(uri);
 		if (dest == NULL) {
@@ -149,6 +157,55 @@ playlist_check_translate_song(struct song *song, const char *base_uri,
 			song_free(song);
 			return dest;
 		}
+#else
+        char *fullPath = map_uri_fs(uri);
+        g_message("playlist org:[%s]\nnew:[%s]\n", uri, fullPath);
+
+  #ifdef SSD_CACHE
+        if(g_cache_disabled){
+            struct stat st;
+            int ret = stat(fullPath, &st);
+            if (ret < 0) {
+                song_free(song);
+                g_free(fullPath);
+                return dest;
+            }
+        }
+        else {
+            char cacheUri[MPD_PATH_MAX]={0};
+
+            mapper_get_cache_url(fullPath,cacheUri);
+            if(isCacheOK(cacheUri)&&(verifyCache(fullPath,cacheUri)==true)) {
+                g_message("playlist This file is already in cache so skip stat : %s\n cache file : %s", fullPath, cacheUri);
+            }
+            else {
+                struct stat st;
+                int ret = stat(fullPath, &st);
+                if (ret < 0) {
+                    song_free(song);
+                    g_free(fullPath);
+                    return dest;
+                }
+            }
+        }
+  #else
+        struct stat st;
+        int ret = stat(fullPath, &st);
+        if (ret < 0) {
+            song_free(song);
+            g_free(fullPath);
+            return dest;
+        }
+  #endif
+        dest = song_file_load(fullPath, NULL);
+        g_free(fullPath);
+
+        if (dest == NULL) {
+            song_free(song);
+            return dest;
+        }
+
+#endif
 	}
 
 	dest = apply_song_metadata(dest, song);

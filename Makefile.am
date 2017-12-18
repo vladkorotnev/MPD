@@ -75,6 +75,9 @@ mpd_headers = \
 	src/decoder_api.h \
 	src/decoder_plugin.h \
 	src/decoder_internal.h \
+	src/decoder/dsdiff_nativeplayback_plugin.c \
+	src/decoder/dsdiff_nativeplayback_plugin.h \
+	src/dsdnative/dsdnative.c src/dsdnative/dsdnative.h \
 	src/directory.h \
 	src/directory_save.h \
 	src/database.h \
@@ -107,6 +110,7 @@ mpd_headers = \
 	src/input/file_input_plugin.h \
 	src/input/ffmpeg_input_plugin.h \
 	src/input/curl_input_plugin.h \
+	src/input/au_stream_plugin.h \
 	src/input/rewind_input_plugin.h \
 	src/input/mms_input_plugin.h \
 	src/input/despotify_input_plugin.h \
@@ -161,6 +165,7 @@ mpd_headers = \
 	src/player_thread.h \
 	src/player_control.h \
 	src/playlist.h \
+	src/wimpmain.h \
 	src/playlist_error.h \
 	src/playlist_internal.h \
 	src/playlist_print.h \
@@ -284,6 +289,8 @@ src_mpd_SOURCES = \
 	src/update_queue.c \
 	src/update_walk.c \
 	src/update_remove.c \
+	src/au_pl_task.c src/au_pl_task.h \
+	src/au_monitor.c src/au_monitor.h \
 	src/client.c \
 	src/client_event.c \
 	src/client_expire.c \
@@ -659,6 +666,7 @@ INPUT_SRC = \
 	src/input_stream.c \
 	src/input_internal.c src/input_internal.h \
 	src/input/rewind_input_plugin.c \
+	src/input/au_stream_plugin.c \
 	src/input/file_input_plugin.c
 
 if ENABLE_CURL

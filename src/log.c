@@ -46,7 +46,7 @@
 
 #define LOG_LEVEL_SECURE G_LOG_LEVEL_INFO
 
-#define LOG_DATE_BUF_SIZE 16
+#define LOG_DATE_BUF_SIZE 20
 #define LOG_DATE_LEN (LOG_DATE_BUF_SIZE - 1)
 
 static GLogLevelFlags log_threshold = G_LOG_LEVEL_MESSAGE;
@@ -70,7 +70,7 @@ static const char *log_date(void)
 {
 	static char buf[LOG_DATE_BUF_SIZE];
 	time_t t = time(NULL);
-	strftime(buf, LOG_DATE_BUF_SIZE, "%b %d %H:%M : ", localtime(&t));
+	strftime(buf, LOG_DATE_BUF_SIZE, "%b %d %H:%M:%S : ", localtime(&t)); //month (%b) day (%d)  hour(%H) %M(minite) 
 	return buf;
 }
 

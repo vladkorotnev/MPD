@@ -32,6 +32,14 @@
 #include "client.h"
 #include "input_stream.h"
 
+#ifdef WIMP_SUPPORT
+	#include "wimpmain.h"
+	#include <unistd.h>
+	#include <sys/types.h>
+	#include <sys/stat.h>
+	#include <fcntl.h>
+#endif
+
 void
 playlist_print_uris(struct client *client, const struct playlist *playlist)
 {
@@ -83,6 +91,25 @@ playlist_print_current(struct client *client, const struct playlist *playlist)
 
 	queue_print_info(client, &playlist->queue,
 			 current_position, current_position + 1);
+	
+#ifdef WIMP_SUPPORT
+	int fd;
+	char *sound_quality;
+	int ret=0;
+
+	sound_quality = (char *)malloc (WIMP_MIN_STRING);
+	fd = open(WIMP_TAG_QUALITY,O_RDONLY);
+
+	if(fd>0)
+	{
+		ret=read(fd, sound_quality,WIMP_MIN_STRING);	
+		sound_quality[ret] = '\0';
+		client_printf(client, "Quality: %s\n", sound_quality);
+		close(fd);
+	}
+	
+	free(sound_quality);
+#endif	
 	return true;
 }
 
@@ -106,6 +133,14 @@ playlist_print_changes_info(struct client *client,
 			    uint32_t version)
 {
 	queue_print_changes_info(client, &playlist->queue, version);
+}
+
+void
+playlist_print_changes_info_wl(struct client *client,
+			    const struct playlist *playlist,
+			    uint32_t version)
+{
+	queue_print_changes_info_wl(client, &playlist->queue, version);
 }
 
 void

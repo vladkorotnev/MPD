@@ -85,3 +85,51 @@ audio_output_disable_index(unsigned idx)
 
 	return true;
 }
+
+bool
+audio_output_enable_AU(unsigned idx)
+{
+	struct audio_output *ao;
+
+	if (idx >= audio_output_count())
+		return false;
+
+	ao = audio_output_get(idx);
+	if (ao->enabled)
+		return true;
+
+	ao->enabled = true;
+	idle_add(IDLE_OUTPUT);
+
+	++audio_output_state_version;
+
+	return true;
+}
+
+bool
+audio_output_disable_AU(unsigned idx)
+{
+	struct audio_output *ao;
+	struct mixer *mixer;
+
+	if (idx >= audio_output_count())
+		return false;
+
+	ao = audio_output_get(idx);
+	if (!ao->enabled)
+		return true;
+
+	ao->enabled = false;
+	idle_add(IDLE_OUTPUT);
+
+	mixer = ao->mixer;
+	if (mixer != NULL) {
+		mixer_close(mixer);
+		idle_add(IDLE_MIXER);
+	}
+
+	++audio_output_state_version;
+
+	return true;
+}
+

@@ -51,6 +51,9 @@ struct config_entry {
 
 static struct config_entry config_entries[] = {
 	{ .name = CONF_MUSIC_DIR, false, false },
+#ifdef SSD_CACHE
+	{ .name = CONF_CACHE_DIR, false, false },
+#endif
 	{ .name = CONF_PLAYLIST_DIR, false, false },
 	{ .name = CONF_FOLLOW_INSIDE_SYMLINKS, false, false },
 	{ .name = CONF_FOLLOW_OUTSIDE_SYMLINKS, false, false },

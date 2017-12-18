@@ -24,6 +24,10 @@
 #include <stdbool.h>
 #include <assert.h>
 
+#ifdef BLASTER_SR
+//#include "mapper.h"
+#endif
+
 enum sample_format {
 	SAMPLE_FORMAT_UNDEFINED = 0,
 
@@ -91,7 +95,7 @@ static inline void audio_format_clear(struct audio_format *af)
 	af->sample_rate = 0;
 	af->format = SAMPLE_FORMAT_UNDEFINED;
 	af->channels = 0;
-	af->reverse_endian = 0;
+	af->reverse_endian = 0;	
 }
 
 /**

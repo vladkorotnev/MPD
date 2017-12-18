@@ -138,10 +138,12 @@ playlist_state_restore(const char *line, FILE *fp, GString *buffer,
 
 	line += sizeof(PLAYLIST_STATE_FILE_STATE) - 1;
 
-	if (strcmp(line, PLAYLIST_STATE_FILE_STATE_PLAY) == 0)
+	/*
+        if (strcmp(line, PLAYLIST_STATE_FILE_STATE_PLAY) == 0)
 		state = PLAYER_STATE_PLAY;
 	else if (strcmp(line, PLAYLIST_STATE_FILE_STATE_PAUSE) == 0)
 		state = PLAYER_STATE_PAUSE;
+        */
 
 	while ((line = read_text_line(fp, buffer)) != NULL) {
 		if (g_str_has_prefix(line, PLAYLIST_STATE_FILE_TIME)) {
@@ -213,9 +215,13 @@ playlist_state_restore(const char *line, FILE *fp, GString *buffer,
 		if (state == PLAYER_STATE_STOP /* && config_option */)
 			playlist->current = current;
 		else if (seek_time == 0)
+                    {
 			playlist_play(playlist, pc, current);
+                    }
 		else
+                    {
 			playlist_seek_song(playlist, pc, current, seek_time);
+                    }
 
 		if (state == PLAYER_STATE_PAUSE)
 			pc_pause(pc);

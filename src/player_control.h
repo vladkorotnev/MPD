@@ -63,6 +63,10 @@ enum player_command {
 	 * e.g. elapsed_time.
 	 */
 	PLAYER_COMMAND_REFRESH,
+#ifdef WIDEA_FADING
+	PLAYER_COMMAND_DCSTOP,
+	PLAYER_COMMAND_DCCANCEL,
+#endif
 };
 
 enum player_error {
@@ -116,6 +120,10 @@ struct player_control {
 	float mixramp_delay_seconds;
 	double total_play_time;
 };
+
+#ifdef WIDEA_FADING
+extern bool g_half_fading;
+#endif
 
 struct player_control *
 pc_new(unsigned buffer_chunks, unsigned buffered_before_play);

@@ -1260,8 +1260,9 @@ input_curl_open(const char *url, GMutex *mutex, GCond *cond,
 
 	struct input_curl *c;
 
-	if (strncmp(url, "http://", 7) != 0)
+    if (memcmp(url, "http://",  7) != 0 && memcmp(url, "https://", 8) != 0)
 		return NULL;
+
 
 	c = g_new0(struct input_curl, 1);
 	input_stream_init(&c->base, &input_plugin_curl, url,

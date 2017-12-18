@@ -157,7 +157,6 @@ audio_output_all_finish(void)
 	g_free(audio_outputs);
 	audio_outputs = NULL;
 	num_audio_outputs = 0;
-
 	notify_deinit(&audio_output_client_notify);
 }
 
@@ -258,7 +257,6 @@ audio_output_all_update(void)
 {
 	unsigned int i;
 	bool ret = false;
-
 	if (!audio_format_defined(&input_audio_format))
 		return false;
 
@@ -288,7 +286,6 @@ audio_output_all_play(struct music_chunk *chunk)
 
 	for (i = 0; i < num_audio_outputs; ++i)
 		audio_output_play(audio_outputs[i]);
-
 	return true;
 }
 
@@ -309,7 +306,6 @@ audio_output_all_open(const struct audio_format *audio_format,
 	/* the audio format must be the same as existing chunks in the
 	   pipe */
 	assert(g_mp == NULL || music_pipe_check_format(g_mp, audio_format));
-
 	if (g_mp == NULL)
 		g_mp = music_pipe_new();
 	else
@@ -320,7 +316,20 @@ audio_output_all_open(const struct audio_format *audio_format,
 					   &input_audio_format));
 
 	input_audio_format = *audio_format;
-
+#ifdef BLASTER_SR
+        //stop cmd is sent when pause/release to avoid stutter when resume
+	//g_debug("audio_output_all_open:sampleRate:%dhz",input_audio_format.sample_rate);
+        //send_blaster_stop_cmd(input_audio_format.sample_rate); //send stop command to avoid noise if rate is different, will be wake up by samplerate cmd
+        //turn amoled off when audioMode is ON mode
+        if(is_audio_mode_enabled())
+        {
+            send_at0_cmd();
+        }
+#endif
+#ifdef AU_METER_BW
+	g_debug("audio_output_all_open:bitWidth:%dbits",input_audio_format.format);
+	send_bit_width(input_audio_format.format);
+#endif
 	audio_output_all_reset_reopen();
 	audio_output_all_enable_disable();
 	audio_output_all_update();
@@ -460,7 +469,6 @@ audio_output_all_check(void)
 		/* return the chunk to the buffer */
 		music_buffer_return(g_music_buffer, shifted);
 	}
-
 	return 0;
 }
 
@@ -468,16 +476,26 @@ bool
 audio_output_all_wait(struct player_control *pc, unsigned threshold)
 {
 	player_lock(pc);
-
 	if (audio_output_all_check() < threshold) {
 		player_unlock(pc);
 		return true;
 	}
-
 	player_wait(pc);
 	player_unlock(pc);
-
 	return audio_output_all_check() < threshold;
+}
+
+void
+audio_output_all_pause_no_clear(void)
+{
+    unsigned int i;
+
+    audio_output_all_update();
+
+    for (i = 0; i < num_audio_outputs; ++i)
+        audio_output_pause(audio_outputs[i]);
+
+    audio_output_wait_all();
 }
 
 void
@@ -491,6 +509,17 @@ audio_output_all_pause(void)
 		audio_output_pause(audio_outputs[i]);
 
 	audio_output_wait_all();
+
+#ifdef BLASTER_SR
+        //send_mute_cmd();
+        send_at1_cmd();
+        clear_sample_rate(); //when pause, we clear sample rate because airplay would reset it to 44.1
+	/*
+	  don't send stop cmd here, send it only for rate change
+	g_debug("audio_output_all_pause,stop audio now"); //to reset samplerate once resume play due to airplay
+        send_blaster_stop_cmd(input_audio_format.sample_rate); 
+	*/
+#endif
 }
 
 void
@@ -498,8 +527,11 @@ audio_output_all_drain(void)
 {
 	for (unsigned i = 0; i < num_audio_outputs; ++i)
 		audio_output_drain_async(audio_outputs[i]);
-
 	audio_output_wait_all();
+#if 0 //def BLASTER_SR	
+	g_debug("OUTPUT DRAIN");	
+    send_mute_cmd();
+#endif
 }
 
 void
@@ -513,7 +545,6 @@ audio_output_all_cancel(void)
 		audio_output_cancel(audio_outputs[i]);
 
 	audio_output_wait_all();
-
 	/* clear the music pipe and return all chunks to the buffer */
 
 	if (g_mp != NULL)
@@ -527,6 +558,10 @@ audio_output_all_cancel(void)
 	/* invalidate elapsed_time */
 
 	audio_output_all_elapsed_time = -1.0;
+#ifdef BLASTER_SR
+        //send_mute_cmd();
+        //send_at1_cmd(); do not turn the amoled on when cancel(seek cmd would also trigger it and it is still playing)
+#endif
 }
 
 void
@@ -546,7 +581,6 @@ audio_output_all_close(void)
 	}
 
 	g_music_buffer = NULL;
-
 	audio_format_clear(&input_audio_format);
 
 	audio_output_all_elapsed_time = -1.0;
@@ -567,12 +601,21 @@ audio_output_all_release(void)
 		music_pipe_free(g_mp);
 		g_mp = NULL;
 	}
-
 	g_music_buffer = NULL;
 
 	audio_format_clear(&input_audio_format);
 
 	audio_output_all_elapsed_time = -1.0;
+    
+#ifdef BLASTER_SR
+        //send_mute_cmd();
+        clear_sample_rate(); //when stop , clear sample rate due to airplay
+	g_debug("audio_output_all_release,stop audio now"); //to reset samplerate once resume play due to airplay
+	/*
+        send_blaster_stop_cmd(input_audio_format.sample_rate); 
+	*/
+        send_at1_cmd();
+#endif
 }
 
 void

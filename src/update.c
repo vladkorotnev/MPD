@@ -62,9 +62,9 @@ static void * update_task(void *_path)
 	const char *path = _path;
 
 	if (path != NULL && *path != 0)
-		g_debug("starting: %s", path);
+		g_message(">>starting: %s", path);
 	else
-		g_debug("starting");
+		g_message(">>starting");
 
 	modified = update_walk(path, discard);
 
@@ -78,9 +78,9 @@ static void * update_task(void *_path)
 	}
 
 	if (path != NULL && *path != 0)
-		g_debug("finished: %s", path);
+		g_message("<<finished: %s", path);
 	else
-		g_debug("finished");
+		g_message("<<finished");
 	g_free(_path);
 
 	progress = UPDATE_PROGRESS_DONE;
@@ -91,6 +91,7 @@ static void * update_task(void *_path)
 static void
 spawn_update_task(const char *path)
 {
+#ifdef ORG
 	GError *e = NULL;
 
 	assert(g_thread_self() == main_task);
@@ -105,6 +106,7 @@ spawn_update_task(const char *path)
 	if (++update_task_id > update_task_id_max)
 		update_task_id = 1;
 	g_debug("spawned thread for update job id %i", update_task_id);
+#endif
 }
 
 unsigned

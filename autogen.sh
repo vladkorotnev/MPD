@@ -1,7 +1,6 @@
 #!/bin/sh
 # Run this to set up the build system: configure, makefiles, etc.
 # (at one point this was based on the version in enlightenment's cvs)
-
 package="mpd"
 
 olddir="`pwd`"

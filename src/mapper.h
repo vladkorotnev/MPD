@@ -27,6 +27,18 @@
 #include <stdbool.h>
 
 #define PLAYLIST_FILE_SUFFIX ".m3u"
+extern int debugFlag;
+#ifdef SSD_CACHE
+#include "player_control.h"
+#define PIPE_PATH "/tmp/render_pipe"
+
+#define FIFO_ADD 0
+#define FIFO_UPDATE 1
+#define FIFO_DELETED 2
+#define FIFO_DELETE_FOREVER  3
+#define PLAYING_FLAG 0x08
+#endif
+
 
 struct directory;
 struct song;
@@ -112,5 +124,56 @@ map_spl_path(void);
  */
 char *
 map_spl_utf8_to_fs(const char *name);
+
+#ifdef SSD_CACHE
+#define SR_FORMPD	"/tmp/.blaster_sr"
+#define AM_FORMPD	"/tmp/.blaster_am"
+#define AM_FLAG         "/srv/widealab/audioMode"
+#define AP_FLAG         "/srv/widealab/protectAMOLED"
+#define SELF_AM_FLAG    "/tmp/.selfamon"
+#define PAUSE_INTERVAL  "/srv/widealab/pause_interval"
+size_t wl_buffer_read(int fd,int offset,void *ptr,size_t size);
+bool fifo_ipc_init(void);
+bool fifo_ipc_finish(void);
+bool is_write_paused(void);
+bool is_ssd_writing(void);
+bool is_marked_reading(void);
+bool mark_ssd_reading(void);
+bool unmark_ssd_reading(void);
+void write_render_pipe(char *cacheUri,int msg);
+void mapper_get_cache_url(char *url,char* cache);
+void mapper_get_cache_url_1(char *fileUrl,char *cacheUrl);
+bool isCacheOK(char* fullCachePath);
+void cacheNotExisted(char *cacheUrl);
+void cacheExisted(char *cacheUrl);
+bool isRegularAndReadable(char* path);
+bool isStateFileRegularAndReadable(char *path);
+void mapper_get_cache_hashuri(char* fullCachePath, char* cacheHashUri);
+unsigned int getHash(char* str);
+void deleteCache(char *c);
+void addToCache(char *cacheUri);
+void deleteCache(char *uri);
+void send_sample_rate_cmd(int sample_rate);
+void send_Y2_cmd(void);
+void send_bit_width(int bw);
+bool send_volume_cmd(int volume);
+bool send_wakeup_cmd(void);
+bool send_at0_cmd(void);
+bool send_at1_cmd(void);
+void send_stop_cmd(void);
+bool send_blaster_stop_cmd(int s, int isDSD);
+void clear_sample_rate(void);
+bool send_sample_rate_cmd_and_pause(struct player_control *p,bool *b,int sample_rate, int isDSD);
+void restartAirport(void);
+void get_sample_rate_from_balster(void);
+void update_opstamp(void);
+void AMOLED_on_delay_off(void);
+bool is_wakeup_cmd(char *cmd);
+bool is_fading_enabled();
+bool isCopying();
+int  get_blaster_sr();
+bool is_nas_lnk(const char *uri);
+__off64_t  get_file_size_from_db(const char* path);
+#endif
 
 #endif

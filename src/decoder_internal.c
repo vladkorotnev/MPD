@@ -24,7 +24,7 @@
 #include "input_stream.h"
 #include "buffer.h"
 #include "chunk.h"
-
+#include "mapper.h"
 #include <assert.h>
 
 /**
@@ -37,9 +37,14 @@ need_chunks(struct decoder_control *dc, bool do_wait)
 	if (dc->command == DECODE_COMMAND_STOP ||
 	    dc->command == DECODE_COMMAND_SEEK)
 		return dc->command;
-
+        //g_debug("need chunk 8");
+	usleep(20);
 	if (do_wait) {
+	  //g_debug("need chunk 9");
+	  usleep(20);
 		decoder_wait(dc);
+		//g_debug("need chunk 10");
+		usleep(20);
 		g_cond_signal(dc->client_cond);
 
 		return dc->command;
@@ -55,25 +60,37 @@ decoder_get_chunk(struct decoder *decoder)
 	enum decoder_command cmd;
 
 	assert(decoder != NULL);
-
+        //g_debug("get chunk 0");
+	usleep(20);
 	if (decoder->chunk != NULL)
 		return decoder->chunk;
-
+        //g_debug("get chunk 1");
+	usleep(20);
 	do {
 		decoder->chunk = music_buffer_allocate(dc->buffer);
+		//g_debug("get chunk 2");
+		usleep(20);
 		if (decoder->chunk != NULL) {
 			decoder->chunk->replay_gain_serial =
 				decoder->replay_gain_serial;
 			if (decoder->replay_gain_serial != 0)
 				decoder->chunk->replay_gain_info =
 					decoder->replay_gain_info;
-
+			//g_debug("get chunk 3");
+			usleep(20);
 			return decoder->chunk;
 		}
-
+		//g_debug("get chunk 4");
+		usleep(20);
 		decoder_lock(dc);
+		//g_debug("get chunk 5");
+		usleep(20);
 		cmd = need_chunks(dc, true);
+		//g_debug("get chunk 6");
+		usleep(20);
 		decoder_unlock(dc);
+		//g_debug("get chunk 7");
+		usleep(20);
 	} while (cmd == DECODE_COMMAND_NONE);
 
 	return NULL;

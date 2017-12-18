@@ -72,6 +72,7 @@ riff_seek_id3(FILE *file)
 	size = fread(&header, sizeof(header), 1, file);
 	if (size != 1 ||
 	    memcmp(header.id, "RIFF", 4) != 0 ||
+	    memcmp(header.id, "TVLG", 4) != 0 ||
 	    GUINT32_FROM_LE(header.size) > (uint32_t)st.st_size)
 		/* not a RIFF file */
 		return 0;

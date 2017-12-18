@@ -55,6 +55,13 @@
 #include "replay_gain_config.h"
 #include "idle.h"
 
+#include "au_pl_task.h"
+
+#ifdef ORG
+#else
+    #include "mapper.h"
+#endif
+
 #ifdef ENABLE_SQLITE
 #include "sticker.h"
 #include "sticker_print.h"
@@ -66,6 +73,8 @@
 #include <time.h>
 #include <stdlib.h>
 #include <errno.h>
+
+extern int au_is_from_seek;
 
 #define COMMAND_STATUS_STATE            "state"
 #define COMMAND_STATUS_REPEAT           "repeat"
@@ -86,7 +95,10 @@
 #define COMMAND_STATUS_MIXRAMPDELAY	"mixrampdelay"
 #define COMMAND_STATUS_AUDIO		"audio"
 #define COMMAND_STATUS_UPDATING_DB	"updating_db"
-
+#ifdef SSD_CACHE
+#define COMMAND_STATUS_CHANGE_RATE      "changerate"
+extern int g_changing_rate;
+#endif
 /*
  * The most we ever use is for search/find, and that limits it to the
  * number of tags we can have.  Add one for the command, and one extra
@@ -476,8 +488,17 @@ static enum command_return
 handle_play(struct client *client, int argc, char *argv[])
 {
 	int song = -1;
+        if (isCopying()) {
+            return COMMAND_RETURN_OK;
+        }
+        int ret = 0;
+        ret = system("timeout 2 sudo kill -9 `pgrep pause`"); //stop fading out
+        if(ret==0)//if successfully interrupt fading out, pause before restore volume
+            {
+                pc_set_pause(client->player_control,true);
+                system("mpc --port 12019 volume 100 &");//in case there's dec vol cmd not yet handled
+            }
 	enum playlist_result result;
-
 	if (argc == 2 && !check_int(client, &song, argv[1], need_positive))
 		return COMMAND_RETURN_ERROR;
 	result = playlist_play(&g_playlist, client->player_control, song);
@@ -485,11 +506,51 @@ handle_play(struct client *client, int argc, char *argv[])
 }
 
 static enum command_return
+handle_play1(struct client *client, int argc, char *argv[])
+{
+	int song = -1;
+        if(!is_fading_enabled())
+            return handle_play(client,argc,argv);
+        if (isCopying()) {
+            return COMMAND_RETURN_OK;
+        }
+	enum playlist_result result;
+	if (argc == 2 && !check_int(client, &song, argv[1], need_positive))
+		return COMMAND_RETURN_ERROR;
+        else if(argc==2)
+            {
+                //fadeout then play n
+                char cmd[256]={0};
+                sprintf(cmd,"/usr/local/sbin/fadeMpc \"play %d\" &",song+1);
+                g_debug("fade and play by %s",cmd);
+                system(cmd);
+            }
+        else if(argc==1)
+            return system("/usr/local/sbin/play &");
+}
+
+static enum command_return
+handle_pause1(struct client *client, int argc, char *argv[])
+{
+        if (isCopying()) {
+            return COMMAND_RETURN_OK;
+        }
+        struct player_status player_status;
+        pc_get_status(client->player_control, &player_status);
+
+	switch (player_status.state) {
+	case PLAYER_STATE_PLAY:
+            g_debug("PAUSE1");
+                return system("/usr/local/sbin/pause &");
+		break;
+	}
+}
+
+static enum command_return
 handle_playid(struct client *client, int argc, char *argv[])
 {
 	int id = -1;
 	enum playlist_result result;
-
 	if (argc == 2 && !check_int(client, &id, argv[1], need_positive))
 		return COMMAND_RETURN_ERROR;
 
@@ -502,6 +563,10 @@ handle_stop(G_GNUC_UNUSED struct client *client,
 	    G_GNUC_UNUSED int argc, G_GNUC_UNUSED char *argv[])
 {
 	playlist_stop(&g_playlist, client->player_control);
+#if 0 //def BLASTER_SR handled in output
+    g_debug("Send 44.1 to blaster for Stop");
+    send_sample_rate_cmd(44100);        
+#endif
 	return COMMAND_RETURN_OK;
 }
 
@@ -517,15 +582,30 @@ static enum command_return
 handle_pause(struct client *client,
 	     int argc, char *argv[])
 {
+        if (isCopying()) {
+            return COMMAND_RETURN_OK;
+        }
+    bool pauseFlag = true;
 	if (argc == 2) {
 		bool pause_flag;
 		if (!check_bool(client, &pause_flag, argv[1]))
 			return COMMAND_RETURN_ERROR;
 
 		pc_set_pause(client->player_control, pause_flag);
-	} else
-		pc_pause(client->player_control);
-
+        pauseFlag = pause_flag;
+	} 
+    else
+	{        
+        pc_pause(client->player_control);
+    }
+#ifdef BLASTER_SR 
+    /*if(pauseFlag)
+    {
+        //done in output
+        g_debug("Send 44.1 to blaster for Pause");
+        send_sample_rate_cmd(44100);        
+    }*/
+#endif
 	return COMMAND_RETURN_OK;
 }
 
@@ -533,23 +613,29 @@ static enum command_return
 handle_status(struct client *client,
 	      G_GNUC_UNUSED int argc, G_GNUC_UNUSED char *argv[])
 {
-	const char *state = NULL;
 	struct player_status player_status;
 	int updateJobId;
 	char *error;
 	int song;
-
+        const char *state=NULL;
 	pc_get_status(client->player_control, &player_status);
 
 	switch (player_status.state) {
 	case PLAYER_STATE_STOP:
-		state = "stop";
+                state="stop";
 		break;
 	case PLAYER_STATE_PAUSE:
-		state = "pause";
+            /*
+              if(g_changing_rate==1)
+                state="pause\n"COMMAND_STATUS_CHANGE_RATE": 1";
+            else
+                state="pause\n"COMMAND_STATUS_CHANGE_RATE": 0";
 		break;
+            */
+                state="pause";
+                break;
 	case PLAYER_STATE_PLAY:
-		state = "play";
+                state="play";
 		break;
 	}
 
@@ -646,6 +732,7 @@ handle_add(struct client *client, G_GNUC_UNUSED int argc, char *argv[])
 	char *uri = argv[1];
 	enum playlist_result result;
 
+#ifdef ORG
 	if (strncmp(uri, "file:///", 8) == 0) {
 #ifdef WIN32
 		result = PLAYLIST_RESULT_DENIED;
@@ -670,11 +757,95 @@ handle_add(struct client *client, G_GNUC_UNUSED int argc, char *argv[])
 					     uri, NULL);
 		return print_playlist_result(client, result);
 	}
+#else
+    if (uri_has_scheme(uri)) {
+        if (!uri_supported_scheme(uri)) {
+            command_error(client, ACK_ERROR_NO_EXIST,
+                      "unsupported URI scheme");
+            return COMMAND_RETURN_ERROR;
+        }
+
+        result = playlist_append_uri(&g_playlist,
+                         client->player_control,
+                         uri, NULL);
+        return print_playlist_result(client, result);
+    }
+
+    char *fullPath;
+
+	int len = queue_length(&g_playlist.queue);
+		
+   	if(len >= AU_MAX_PLIST)
+	{
+		g_message("==> handle_add no more queue [%d]\n", len);
+		result = PLAYLIST_RESULT_TOO_LARGE;
+	}
+	else
+	{
+		fullPath = map_uri_fs(uri);
+		if(len == 0)		
+		{
+			g_message("==> handle_add  use orginal method [%d]\n", len);
+			result = playlist_append_file(&g_playlist,
+									  client->player_control,
+									  fullPath, client_get_uid(client),
+									  NULL); 
+		}
+		else
+		{
+			result = enqueue_au_pl(fullPath, client_get_uid(client), -1);
+		}
+		g_free(fullPath);	
+	}
+	
+	return print_playlist_result(client, result);
+#if 0	
+    g_message("add org:[%s]\nnew:[%s]\n", uri, fullPath);
+
+    result = playlist_append_file(&g_playlist,
+                              client->player_control,
+                              fullPath, client_get_uid(client),
+                              NULL);
+    g_free(fullPath);
+
+    return print_playlist_result(client, result);
+#endif
+#endif
 
 	GError *error = NULL;
 	return addAllIn(client->player_control, uri, &error)
 		? COMMAND_RETURN_OK
 		: print_error(client, error);
+}
+
+static enum command_return
+handle_cache_rm(struct client *client, int argc, char *argv[])
+{
+	char *uri = argv[1];
+    char *fullPath;
+    bool hasUri = uri_has_scheme(uri);
+
+    if (hasUri) {
+	        g_warning("Don't support cash_rm for : %s", uri);
+            return COMMAND_RETURN_ERROR;
+    }
+    else {
+        fullPath = map_uri_fs(uri);
+        g_message("cach_rm  file:[%s]\nfullPath:[%s]\n", uri, fullPath);
+
+	    playlist_stop(&g_playlist, client->player_control);
+
+        bool deleted = cacheDeleteForever(fullPath);
+
+        free(fullPath);
+	    
+        if (deleted)
+            client_printf(client, "cache cleared\n");
+        else
+            client_printf(client, "cache clear failed\n");
+    }
+
+	return COMMAND_RETURN_OK;
 }
 
 static enum command_return
@@ -684,47 +855,74 @@ handle_addid(struct client *client, int argc, char *argv[])
 	unsigned added_id;
 	enum playlist_result result;
 
-	if (strncmp(uri, "file:///", 8) == 0) {
-#ifdef WIN32
-		result = PLAYLIST_RESULT_DENIED;
-#else
-		result = playlist_append_file(&g_playlist,
-					      client->player_control,
-					      uri + 7,
-					      client_get_uid(client),
-					      &added_id);
-#endif
-	} else {
-		if (uri_has_scheme(uri) && !uri_supported_scheme(uri)) {
-			command_error(client, ACK_ERROR_NO_EXIST,
-				      "unsupported URI scheme");
-			return COMMAND_RETURN_ERROR;
+    bool hasUri = uri_has_scheme(uri);
+
+    if (hasUri) {
+        if (!uri_supported_scheme(uri)) {
+            command_error(client, ACK_ERROR_NO_EXIST,
+                      "unsupported URI scheme");
+            return COMMAND_RETURN_ERROR;
+        }
+
+        result = playlist_append_uri(&g_playlist,
+                         client->player_control,
+                         uri, &added_id);
+		if (argc == 3) {
+			int to;
+			if (!check_int(client, &to, argv[2], check_integer, argv[2]))
+				return COMMAND_RETURN_ERROR;
+			result = playlist_move_id(&g_playlist, client->player_control,
+						  added_id, to);
+			if (result != PLAYLIST_RESULT_SUCCESS) {
+				enum command_return ret =
+					print_playlist_result(client, result);
+				playlist_delete_id(&g_playlist, client->player_control,
+						   added_id);
+				return ret;
+			}
+		}
+		
+    }
+    else {
+        char *fullPath;
+		int len = queue_length(&g_playlist.queue);
+		
+	   	if(len >= AU_MAX_PLIST)
+		{
+			g_message("==> handle_addid no more queue [%d]\n", len);
+			return print_playlist_result(client, PLAYLIST_RESULT_TOO_LARGE);
+		}			
+
+		int to = -1;
+		
+		if (argc == 3)
+		{
+			if (!check_int(client, &to, argv[2], check_integer, argv[2]))
+				return COMMAND_RETURN_ERROR;
+		
 		}
 
-		result = playlist_append_uri(&g_playlist,
-					     client->player_control,
-					     uri, &added_id);
-	}
+		fullPath = map_uri_fs(uri);
+
+		if(len == 0)		
+		{
+			g_message("==> handle_addid use orginal method [%d]\n", len);
+	        result =  playlist_append_uri_nodb(&g_playlist,
+                                           client->player_control,
+                                           fullPath, &added_id); 
+		}
+		else
+			result = enqueue_au_pl(fullPath, client_get_uid(client), to);
+		
+        free(fullPath);
+    }
+
 
 	if (result != PLAYLIST_RESULT_SUCCESS)
 		return print_playlist_result(client, result);
 
-	if (argc == 3) {
-		int to;
-		if (!check_int(client, &to, argv[2], check_integer, argv[2]))
-			return COMMAND_RETURN_ERROR;
-		result = playlist_move_id(&g_playlist, client->player_control,
-					  added_id, to);
-		if (result != PLAYLIST_RESULT_SUCCESS) {
-			enum command_return ret =
-				print_playlist_result(client, result);
-			playlist_delete_id(&g_playlist, client->player_control,
-					   added_id);
-			return ret;
-		}
-	}
-
 	client_printf(client, "Id: %u\n", added_id);
+
 	return COMMAND_RETURN_OK;
 }
 
@@ -780,7 +978,29 @@ static enum command_return
 handle_clear(G_GNUC_UNUSED struct client *client,
 	     G_GNUC_UNUSED int argc, G_GNUC_UNUSED char *argv[])
 {
-	playlist_clear(&g_playlist, client->player_control);
+		au_pl_stop();
+        playlist_clear(&g_playlist, client->player_control);
+	return COMMAND_RETURN_OK;
+}
+
+static enum command_return
+handle_clear1(G_GNUC_UNUSED struct client *client,
+	     G_GNUC_UNUSED int argc, G_GNUC_UNUSED char *argv[])
+{
+        if(is_fading_enabled())
+            system("/usr/local/sbin/fadeMpc clear &");
+        else 
+            return handle_clear(client,argc,argv);
+	return COMMAND_RETURN_OK;
+}
+
+static enum command_return
+handle_clearExceptPlaying(struct client *client,
+
+	    G_GNUC_UNUSED int argc, char *argv[])
+{
+	au_pl_stop();
+    playlist_clearExceptPlaying(&g_playlist, client->player_control);
 	return COMMAND_RETURN_OK;
 }
 
@@ -798,6 +1018,8 @@ static enum command_return
 handle_load(struct client *client, G_GNUC_UNUSED int argc, char *argv[])
 {
 	enum playlist_result result;
+
+	au_pl_stop();
 
 	result = playlist_open_into_queue(argv[1], &g_playlist,
 					  client->player_control, true);
@@ -892,6 +1114,24 @@ handle_plchanges(struct client *client, G_GNUC_UNUSED int argc, char *argv[])
 		return COMMAND_RETURN_ERROR;
 
 	playlist_print_changes_info(client, &g_playlist, version);
+	return COMMAND_RETURN_OK;
+}
+
+static enum command_return
+handle_plchanges_wl(struct client *client, G_GNUC_UNUSED int argc, char *argv[])
+{
+	uint32_t version;
+
+	if (!check_uint32(client, &version, argv[1], need_positive))
+		return COMMAND_RETURN_ERROR;
+
+	client_printf(client,
+		COMMAND_STATUS_PLAYLIST ": %li\n"
+		COMMAND_STATUS_PLAYLIST_LENGTH ": %i\n",
+		playlist_get_version(&g_playlist),
+		playlist_get_length(&g_playlist));
+
+	playlist_print_changes_info_wl(client, &g_playlist, version);
 	return COMMAND_RETURN_OK;
 }
 
@@ -1122,6 +1362,7 @@ handle_update(struct client *client, G_GNUC_UNUSED int argc, char *argv[])
 	const char *path = NULL;
 	unsigned ret;
 
+#ifdef ORG
 	assert(argc <= 2);
 	if (argc == 2) {
 		path = argv[1];
@@ -1145,6 +1386,9 @@ handle_update(struct client *client, G_GNUC_UNUSED int argc, char *argv[])
 			      "already updating");
 		return COMMAND_RETURN_ERROR;
 	}
+#else
+    return COMMAND_RETURN_OK;
+#endif
 }
 
 static enum command_return
@@ -1181,8 +1425,18 @@ handle_next(G_GNUC_UNUSED struct client *client,
 {
 	/* single mode is not considered when this is user who
 	 * wants to change song. */
+        if (isCopying()) {
+            return COMMAND_RETURN_OK;
+        }
 	int single = g_playlist.queue.single;
-	g_playlist.queue.single = false;
+	g_playlist.queue.single = false;	
+        int ret = 0;
+        ret = system("timeout 2 sudo kill -9 `pgrep pause`"); //stop fading out
+        if(ret==0)//if successfully interrupt fading out, pause before restore volume
+            {
+                pc_set_pause(client->player_control,true);
+                system("mpc --port 12019 volume 100 &");//in case there's dec vol cmd not yet handled
+            }
 
 	playlist_next(&g_playlist, client->player_control);
 
@@ -1191,10 +1445,50 @@ handle_next(G_GNUC_UNUSED struct client *client,
 }
 
 static enum command_return
+handle_next1(G_GNUC_UNUSED struct client *client,
+	    G_GNUC_UNUSED int argc, G_GNUC_UNUSED char *argv[])
+{
+        if (isCopying()) {
+            return COMMAND_RETURN_OK;
+        }
+        if(is_fading_enabled())
+            system("/usr/local/sbin/fadeMpc next &");
+        else
+            return handle_next(client,argc,argv);
+	return COMMAND_RETURN_OK;
+}
+
+
+static enum command_return
 handle_previous(G_GNUC_UNUSED struct client *client,
 		G_GNUC_UNUSED int argc, G_GNUC_UNUSED char *argv[])
 {
+        if (isCopying()) {
+            return COMMAND_RETURN_OK;
+        }
+        int ret = 0;
+        ret = system("timeout 2 sudo kill -9 `pgrep pause`"); //stop fading out
+        if(ret==0)//if successfully interrupt fading out, pause before restore volume
+            {
+                pc_set_pause(client->player_control,true);
+                system("mpc --port 12019 volume 100 &");//in case there's dec vol cmd not yet handled
+            }
+
 	playlist_previous(&g_playlist, client->player_control);
+	return COMMAND_RETURN_OK;
+}
+
+static enum command_return
+handle_prev1(G_GNUC_UNUSED struct client *client,
+	    G_GNUC_UNUSED int argc, G_GNUC_UNUSED char *argv[])
+{
+        if (isCopying()) {
+            return COMMAND_RETURN_OK;
+        }
+        if(is_fading_enabled())
+            system("/usr/local/sbin/fadeMpc prev &");
+        else
+            return handle_previous(client,argc,argv);
 	return COMMAND_RETURN_OK;
 }
 
@@ -1302,7 +1596,7 @@ static enum command_return
 handle_repeat(struct client *client, G_GNUC_UNUSED int argc, char *argv[])
 {
 	int status;
-
+	
 	if (!check_int(client, &status, argv[1], need_integer))
 		return COMMAND_RETURN_ERROR;
 
@@ -1504,11 +1798,22 @@ handle_seek(struct client *client, G_GNUC_UNUSED int argc, char *argv[])
 {
 	int song, seek_time;
 	enum playlist_result result;
-
+        int ret = 0;
 	if (!check_int(client, &song, argv[1], check_integer, argv[1]))
 		return COMMAND_RETURN_ERROR;
 	if (!check_int(client, &seek_time, argv[2], check_integer, argv[2]))
 		return COMMAND_RETURN_ERROR;
+
+	ret = system("timeout 2 sudo kill -9 `pgrep pause`"); //stop fading out
+	if(ret==0)//if successfully interrupt fading out, pause before restore volume
+	{
+		system("mpc --port 12019 volume 100 &");//in case there's dec vol cmd not yet handled
+	}
+
+	if(seek_time == 0)
+		au_is_from_seek = 1;
+	else
+		au_is_from_seek = 0;
 
 	result = playlist_seek_song(&g_playlist, client->player_control,
 				    song, seek_time);
@@ -1526,6 +1831,11 @@ handle_seekid(struct client *client, G_GNUC_UNUSED int argc, char *argv[])
 	if (!check_int(client, &seek_time, argv[2], check_integer, argv[2]))
 		return COMMAND_RETURN_ERROR;
 
+	if(seek_time == 0)
+		au_is_from_seek = 1;
+	else
+		au_is_from_seek = 0;
+	
 	result = playlist_seek_song_id(&g_playlist, client->player_control,
 				       id, seek_time);
 	return print_playlist_result(client, result);
@@ -1683,9 +1993,13 @@ handle_playlistadd(struct client *client, G_GNUC_UNUSED int argc, char *argv[])
 			return COMMAND_RETURN_ERROR;
 		}
 
-		success = spl_append_uri(argv[1], playlist, &error);
-	} else
-		success = addAllInToStoredPlaylist(uri, playlist, &error);
+		if(strstr(uri,"tidal://") || strstr(uri,"qobuz://") || strstr(uri,"bugs://") || strstr(uri,"shout://")) // '15.01.29 Dubby : add tidal url.
+			success = spl_append_file(uri, playlist, &error);
+		else
+			success = spl_append_uri(argv[1], playlist, &error);
+	} else 
+		success = spl_append_file(uri, playlist, &error); // '15.01.29 Dubby : add song's to playlist without db.
+//		success = addAllInToStoredPlaylist(uri, playlist, &error);
 
 	if (!success && error == NULL) {
 		command_error(client, ACK_ERROR_NO_EXIST,
@@ -2094,8 +2408,11 @@ handle_send_message(struct client *client,
 static const struct command commands[] = {
 	{ "add", PERMISSION_ADD, 1, 1, handle_add },
 	{ "addid", PERMISSION_ADD, 1, 2, handle_addid },
+	{ "cache_rm", PERMISSION_ADMIN, 1, 1, handle_cache_rm },
 	{ "channels", PERMISSION_READ, 0, 0, handle_channels },
 	{ "clear", PERMISSION_CONTROL, 0, 0, handle_clear },
+	{ "clear1", PERMISSION_CONTROL, 0, 0, handle_clear1 },
+	{ "clearEplaying", PERMISSION_CONTROL, 0, 0, handle_clearExceptPlaying },
 	{ "clearerror", PERMISSION_CONTROL, 0, 0, handle_clearerror },
 	{ "close", PERMISSION_NONE, -1, -1, handle_close },
 	{ "commands", PERMISSION_NONE, 0, 0, handle_commands },
@@ -2125,12 +2442,15 @@ static const struct command commands[] = {
 	{ "move", PERMISSION_CONTROL, 2, 2, handle_move },
 	{ "moveid", PERMISSION_CONTROL, 2, 2, handle_moveid },
 	{ "next", PERMISSION_CONTROL, 0, 0, handle_next },
+	{ "next1", PERMISSION_CONTROL, 0, 0, handle_next1 },
 	{ "notcommands", PERMISSION_NONE, 0, 0, handle_not_commands },
 	{ "outputs", PERMISSION_READ, 0, 0, handle_devices },
 	{ "password", PERMISSION_NONE, 1, 1, handle_password },
 	{ "pause", PERMISSION_CONTROL, 0, 1, handle_pause },
+	{ "pause1", PERMISSION_CONTROL, 0, 1, handle_pause1 },
 	{ "ping", PERMISSION_NONE, 0, 0, handle_ping },
 	{ "play", PERMISSION_CONTROL, 0, 1, handle_play },
+	{ "play1", PERMISSION_CONTROL, 0, 1, handle_play1 },
 	{ "playid", PERMISSION_CONTROL, 0, 1, handle_playid },
 	{ "playlist", PERMISSION_READ, 0, 0, handle_playlist },
 	{ "playlistadd", PERMISSION_CONTROL, 2, 2, handle_playlistadd },
@@ -2143,6 +2463,8 @@ static const struct command commands[] = {
 	{ "playlistsearch", PERMISSION_READ, 2, -1, handle_playlistsearch },
 	{ "plchanges", PERMISSION_READ, 1, 1, handle_plchanges },
 	{ "plchangesposid", PERMISSION_READ, 1, 1, handle_plchangesposid },
+	{ "plchangeswl", PERMISSION_READ, 1, 1, handle_plchanges_wl },
+	{ "prev1", PERMISSION_CONTROL, 0, 0, handle_prev1 },
 	{ "previous", PERMISSION_CONTROL, 0, 0, handle_previous },
 	{ "prio", PERMISSION_CONTROL, 2, -1, handle_prio },
 	{ "prioid", PERMISSION_CONTROL, 2, -1, handle_prioid },
@@ -2391,8 +2713,21 @@ command_process(struct client *client, unsigned num, char *line)
 	cmd = command_checked_lookup(client, client_get_permission(client),
 				     argc, argv);
 	if (cmd)
-		ret = cmd->handler(client, argc, argv);
-
+	  {
+#ifdef SSD_CACHE
+	    if(is_wakeup_cmd(cmd->cmd))
+	      {
+		g_debug("%s is wakeup cmd",cmd->cmd);
+		//send_wakeup_cmd();
+                if(is_audio_mode_enabled())
+                {
+                    AMOLED_on_delay_off();
+                }
+                update_opstamp();
+	      }
+#endif
+	    ret = cmd->handler(client, argc, argv);
+	  }
 	current_command = NULL;
 	command_list_num = 0;
 

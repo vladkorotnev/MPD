@@ -37,6 +37,10 @@
 #include "mpd_error.h"
 
 #include <glib.h>
+#include <unistd.h>
+
+
+#include "wimpmain.h"
 
 #undef G_LOG_DOMAIN
 #define G_LOG_DOMAIN "player_thread"
@@ -74,6 +78,14 @@ struct player {
 	 * is there a new song in pc.next_song?
 	 */
 	bool queued;
+
+	/**
+	 * Was any audio output opened successfully?  It might have
+	 * failed meanwhile, but was not explicitly closed by the
+	 * player thread.  When this flag is unset, some output
+	 * methods must not be called.
+	 */
+	bool output_open;
 
 	/**
 	 * the song currently being played
@@ -115,6 +127,7 @@ struct player {
 	 * precisely.
 	 */
 	float elapsed_time;
+//	int nr_silence;
 };
 
 static struct music_buffer *player_buffer;
@@ -126,7 +139,12 @@ player_command_finished_locked(struct player_control *pc)
 
 	pc->command = PLAYER_COMMAND_NONE;
 	g_cond_signal(main_cond);
+	//g_debug("Player g_cond_signal");
 }
+
+#ifdef WIDEA_FADING
+bool g_half_fading=false;
+#endif
 
 static void
 player_command_finished(struct player_control *pc)
@@ -146,7 +164,7 @@ player_dc_start(struct player *player, struct music_pipe *pipe)
 {
 	struct player_control *pc = player->pc;
 	struct decoder_control *dc = player->dc;
-
+	
 	assert(player->queued || pc->command == PLAYER_COMMAND_SEEK);
 	assert(pc->next_song != NULL);
 
@@ -251,8 +269,7 @@ player_wait_for_decoder(struct player *player)
 	player_unlock(pc);
 
 	/* call syncPlaylistWithQueue() in the main thread */
-	event_pipe_emit(PIPE_EVENT_PLAYLIST);
-
+	event_pipe_emit(PIPE_EVENT_PLAYLIST);	
 	return true;
 }
 
@@ -274,6 +291,46 @@ real_song_duration(const struct song *song, double decoder_duration)
 		return (song->end_ms - song->start_ms) / 1000.0;
 
 	return decoder_duration - song->start_ms / 1000.0;
+}
+
+/**
+ * Wrapper for audio_output_all_open().  Upon failure, it pauses the
+ * player.
+ *
+ * @return true on success
+ */
+static bool
+player_open_output(struct player *player)
+{
+	struct player_control *pc = player->pc;
+
+	assert(audio_format_defined(&player->play_audio_format));
+	assert(pc->state == PLAYER_STATE_PLAY ||
+	       pc->state == PLAYER_STATE_PAUSE);
+
+	if (audio_output_all_open(&player->play_audio_format, player_buffer)) {
+		player->output_open = true;
+		player->paused = false;
+
+		player_lock(pc);
+		pc->state = PLAYER_STATE_PLAY;
+		player_unlock(pc);
+
+		return true;
+	} else {
+		player->output_open = false;
+
+		/* pause: the user may resume playback as soon as an
+		   audio output becomes available */
+		player->paused = true;
+
+		player_lock(pc);
+		pc->error = PLAYER_ERROR_AUDIO;
+		pc->state = PLAYER_STATE_PAUSE;
+		player_unlock(pc);
+
+		return false;
+	}
 }
 
 /**
@@ -308,7 +365,7 @@ player_check_decoder_startup(struct player *player)
 
 		decoder_unlock(dc);
 
-		if (audio_format_defined(&player->play_audio_format) &&
+		if (player->output_open &&
 		    !audio_output_all_wait(pc, 1))
 			/* the output devices havn't finished playing
 			   all chunks yet - wait for that */
@@ -322,23 +379,12 @@ player_check_decoder_startup(struct player *player)
 		player->play_audio_format = dc->out_audio_format;
 		player->decoder_starting = false;
 
-		if (!player->paused &&
-		    !audio_output_all_open(&dc->out_audio_format,
-					   player_buffer)) {
+		if (!player->paused && !player_open_output(player)) {
 			char *uri = song_get_uri(dc->song);
 			g_warning("problems opening audio device "
 				  "while playing \"%s\"", uri);
 			g_free(uri);
 
-			player_lock(pc);
-			pc->error = PLAYER_ERROR_AUDIO;
-
-			/* pause: the user may resume playback as soon
-			   as an audio output becomes available */
-			pc->state = PLAYER_STATE_PAUSE;
-			player_unlock(pc);
-
-			player->paused = true;
 			return true;
 		}
 
@@ -363,7 +409,14 @@ player_check_decoder_startup(struct player *player)
 static bool
 player_send_silence(struct player *player)
 {
+	assert(player->output_open);
 	assert(audio_format_defined(&player->play_audio_format));
+
+    if (player->dc->isDSD) {
+        //g_message(">>>>>>>>>>>>>SendSilence:  skip for DSD <<<<<<<<<<<<\n");
+	   
+        return true;
+    }
 
 	struct music_chunk *chunk = music_buffer_allocate(player_buffer);
 	if (chunk == NULL) {
@@ -371,7 +424,7 @@ player_send_silence(struct player *player)
 		return false;
 	}
 
-#ifndef NDEBUG
+#ifndef NDEBUG  //leo , send silence with the same format all the time.
 	chunk->audio_format = player->play_audio_format;
 #endif
 
@@ -384,12 +437,16 @@ player_send_silence(struct player *player)
 	chunk->times = -1.0; /* undefined time stamp */
 	chunk->length = num_frames * frame_size;
 	memset(chunk->data, 0, chunk->length);
-
+#if 0
+    g_message(">>>>>>>>>>>>>SendSilence:   SampleRate %d, DSD Type %d<<<<<<<<<<<<\n",
+              player->play_audio_format.sample_rate,
+              player->dc->isDSD);
+#endif
 	if (!audio_output_all_play(chunk)) {
 		music_buffer_return(player_buffer, chunk);
 		return false;
 	}
-
+	
 	return true;
 }
 
@@ -499,9 +556,18 @@ static void player_process_command(struct player *player)
 	case PLAYER_COMMAND_QUEUE:
 		assert(pc->next_song != NULL);
 		assert(!player->queued);
+		#ifndef WIDEA_FADING
 		assert(!player_dc_at_next_song(player));
-
+		#else
+		//Leo, do we need to stop current song before queue next?
+		//issue when send 'next' command twice and fast
+		if(player_dc_at_next_song(player))
+		{
+			g_debug("\n>>>\n>>>player dc at next song, it's normal when crossfading : skip this assert <<<");	
+		}
+		#endif
 		player->queued = true;
+		g_debug("PLAYER_COMMAND_QUEUE of player thread");
 		player_command_finished_locked(pc);
 		break;
 
@@ -510,6 +576,7 @@ static void player_process_command(struct player *player)
 
 		player->paused = !player->paused;
 		if (player->paused) {
+                        //send_sample_rate_cmd(44100);
 			audio_output_all_pause();
 			player_lock(pc);
 
@@ -520,17 +587,8 @@ static void player_process_command(struct player *player)
 			player_lock(pc);
 
 			pc->state = PLAYER_STATE_PLAY;
-		} else if (audio_output_all_open(&player->play_audio_format, player_buffer)) {
-			/* unpaused, continue playing */
-			player_lock(pc);
-
-			pc->state = PLAYER_STATE_PLAY;
 		} else {
-			/* the audio device has failed - rollback to
-			   pause mode */
-			pc->error = PLAYER_ERROR_AUDIO;
-
-			player->paused = true;
+			player_open_output(player);
 
 			player_lock(pc);
 		}
@@ -543,7 +601,25 @@ static void player_process_command(struct player *player)
 		player_seek_decoder(player);
 		player_lock(pc);
 		break;
-
+#ifdef WIDEA_FADING
+	//issue when send 'next' quickly after new playback start.
+	//can't accquire decoder thread stop
+	case PLAYER_COMMAND_DCSTOP:
+		player_unlock();
+		dc_stop(player->dc);
+		player_dc_start(player, music_pipe_new());
+		player_command_finished_locked();
+		player_lock();
+		break;
+		
+	case PLAYER_COMMAND_DCCANCEL:
+		player_unlock();
+		pc.next_song = NULL;
+		player->queued = false;
+		player_command_finished_locked();
+		player_lock();
+		break;
+#endif
 	case PLAYER_COMMAND_CANCEL:
 		if (pc->next_song == NULL) {
 			/* the cancel request arrived too late, we're
@@ -562,13 +638,12 @@ static void player_process_command(struct player *player)
 		}
 
 		pc->next_song = NULL;
-		player->queued = false;
+		player->queued = false;		
 		player_command_finished_locked(pc);
 		break;
 
 	case PLAYER_COMMAND_REFRESH:
-		if (audio_format_defined(&player->play_audio_format) &&
-		    !player->paused) {
+		if (player->output_open && !player->paused) {
 			player_unlock(pc);
 			audio_output_all_check();
 			player_lock(pc);
@@ -637,6 +712,10 @@ play_chunk(struct player_control *pc,
 	if (!audio_output_all_play(chunk))
 		return false;
 
+#ifdef BLASTER_SR
+        //g_debug("play_chunk:sampleRate:%dhz",format->sample_rate);
+	//        send_sample_rate_cmd(format->sample_rate);
+#endif
 	pc->total_play_time += (double)chunk->length /
 		audio_format_time_to_size(format);
 	return true;
@@ -653,18 +732,24 @@ play_next_chunk(struct player *player)
 {
 	struct player_control *pc = player->pc;
 	struct decoder_control *dc = player->dc;
-
 	if (!audio_output_all_wait(pc, 64))
 		/* the output pipe is still large enough, don't send
 		   another chunk */
+	{
 		return true;
+	}
 
 	unsigned cross_fade_position;
 	struct music_chunk *chunk = NULL;
 	if (player->xfade == XFADE_ENABLED &&
 	    player_dc_at_next_song(player) &&
 	    (cross_fade_position = music_pipe_size(player->pipe))
-	    <= player->cross_fade_chunks) {
+	    <= player->cross_fade_chunks
+#ifdef WIDEA_FADING
+	    &&dc->out_audio_format.format!=32 //leo , prevent mpd crash when crossfading 32 bit audio
+#endif
+		)
+	    { 	
 		/* perform cross fade */
 		struct music_chunk *other_chunk =
 			music_pipe_shift(dc->pipe);
@@ -747,8 +832,29 @@ play_next_chunk(struct player *player)
 		player->cross_fade_tag = NULL;
 	}
 
-	/* play the current chunk */
+#ifdef BLASTER_SR
 
+        //even we send stop cmd when pause/release device, it is necessary since sometimes user would change track directly
+		int currentSong_isDSD=0;
+
+		if(player->dc->isDSD)
+			currentSong_isDSD=1;
+		
+        if(send_blaster_stop_cmd(player->play_audio_format.sample_rate, currentSong_isDSD)==false)
+        {
+            g_warning("Fail to send stop command");
+            player_lock(pc);
+            pc->error = PLAYER_ERROR_AUDIO;
+            /* pause: the user may resume playback as soon as an
+               audio output becomes available */
+            pc->state = PLAYER_STATE_PAUSE;
+            player->paused = true;
+            player_unlock(pc);
+            return false;
+        }
+#endif
+
+	/* play the current chunk */
 	if (!play_chunk(player->pc, player->song, chunk,
 			&player->play_audio_format)) {
 		music_buffer_return(player_buffer, chunk);
@@ -767,14 +873,43 @@ play_next_chunk(struct player *player)
 		return false;
 	}
 
+#ifdef BLASTER_SR
+	    //g_debug("play_chunk:sampleRate:%dhz",player->play_audio_format.sample_rate);
+
+        if(send_sample_rate_cmd_and_pause(player->pc,&(player->paused),player->play_audio_format.sample_rate, currentSong_isDSD)==false)
+        {
+            g_warning("Fail to lock blaster rate, pause now");
+            player_lock(pc);
+            pc->error = PLAYER_ERROR_AUDIO;
+            /* pause: the user may resume playback as soon as an
+               audio output becomes available */
+            pc->state = PLAYER_STATE_PAUSE;
+            player->paused = true;
+            player_unlock(pc);
+            return false;
+        }
+        if(player->paused)
+        {
+            g_debug("Player paused");
+        }
+#endif
+
 	/* this formula should prevent that the decoder gets woken up
 	   with each chunk; it is more efficient to make it decode a
 	   larger block at a time */
+
+	/*
+	Leo: since we change the buffer size(decreased) for crossfading.
+	this formula or sth might not work for a small buffer size??
+	and make it fail to send the dc_signal sometime??
+	*/
 	decoder_lock(dc);
 	if (!decoder_is_idle(dc) &&
 	    music_pipe_size(dc->pipe) <= (pc->buffered_before_play +
 					 music_buffer_size(player_buffer) * 3) / 4)
+	{	
 		decoder_signal(dc);
+	}
 	decoder_unlock(dc);
 
 	return true;
@@ -793,10 +928,25 @@ static bool
 player_song_border(struct player *player)
 {
 	player->xfade = XFADE_UNKNOWN;
+	char cmd[PATH_MAX]={0};
+	char *uri;
+	
+	uri = song_get_uri(player->song);
+	
+	/*
+		add the song to list
+	*/
+	if(uri != NULL)
+	{
+		g_message("played \"%s\"", uri);
+	    sprintf(cmd,"/usr/local/sbin/savePlayedSong \"%s\" &",uri);
+		int result = system(cmd);
 
-	char *uri = song_get_uri(player->song);
-	g_message("played \"%s\"", uri);
-	g_free(uri);
+		g_free(uri);
+		g_debug("Add Recent Played Song by [ %s ]:%d",cmd, result);
+	}
+	else
+		g_message("====> player_song_border get NULL song <=====");
 
 	music_pipe_free(player->pipe);
 	player->pipe = player->dc->pipe;
@@ -823,14 +973,16 @@ static void do_play(struct player_control *pc, struct decoder_control *dc)
 		.decoder_starting = false,
 		.paused = false,
 		.queued = true,
+		.output_open = false,
 		.song = NULL,
 		.xfade = XFADE_UNKNOWN,
 		.cross_fading = false,
 		.cross_fade_chunks = 0,
 		.cross_fade_tag = NULL,
 		.elapsed_time = 0.0,
+//		.nr_silence = 0,
 	};
-
+	
 	player_unlock(pc);
 
 	player.pipe = music_pipe_new();
@@ -871,7 +1023,7 @@ static void do_play(struct player_control *pc, struct decoder_control *dc)
 				/* not enough decoded buffer space yet */
 
 				if (!player.paused &&
-				    audio_format_defined(&player.play_audio_format) &&
+				    player.output_open &&
 				    audio_output_all_check() < 4 &&
 				    !player_send_silence(&player))
 					break;
@@ -912,7 +1064,7 @@ static void do_play(struct player_control *pc, struct decoder_control *dc)
 			   make it decode the next song */
 
 			assert(dc->pipe == NULL || dc->pipe == player.pipe);
-
+			
 			player_dc_start(&player, music_pipe_new());
 		}
 
@@ -945,14 +1097,13 @@ static void do_play(struct player_control *pc, struct decoder_control *dc)
 
 		if (player.paused) {
 			player_lock(pc);
-
 			if (pc->command == PLAYER_COMMAND_NONE)
 				player_wait(pc);
 			continue;
 		} else if (!music_pipe_empty(player.pipe)) {
 			/* at least one music chunk is ready - send it
 			   to the audio output */
-
+				
 			play_next_chunk(&player);
 		} else if (audio_output_all_check() > 0) {
 			/* not enough data from decoder, but the
@@ -976,7 +1127,7 @@ static void do_play(struct player_control *pc, struct decoder_control *dc)
 				audio_output_all_drain();
 				break;
 			}
-		} else {
+		} else if (player.output_open) {
 			/* the decoder is too busy and hasn't provided
 			   new PCM data in time: send silence (if the
 			   output pipe is empty) */
@@ -1005,7 +1156,6 @@ static void do_play(struct player_control *pc, struct decoder_control *dc)
 	pc->state = PLAYER_STATE_STOP;
 
 	player_unlock(pc);
-
 	event_pipe_emit(PIPE_EVENT_PLAYLIST);
 
 	player_lock(pc);
@@ -1027,7 +1177,6 @@ player_task(gpointer arg)
 		switch (pc->command) {
 		case PLAYER_COMMAND_QUEUE:
 			assert(pc->next_song != NULL);
-
 			do_play(pc, dc);
 			break;
 
@@ -1035,6 +1184,8 @@ player_task(gpointer arg)
 			player_unlock(pc);
 			audio_output_all_cancel();
 			player_lock(pc);
+
+			g_debug("#######Player Task : PLAYER_COMMAND_STOP");
 
 			/* fall through */
 
@@ -1060,6 +1211,8 @@ player_task(gpointer arg)
 			player_buffer = music_buffer_new(pc->buffer_chunks);
 #endif
 
+			g_debug("#######Player Task : PLAYER_COMMAND_CLOSE_AUDIO");
+
 			break;
 
 		case PLAYER_COMMAND_UPDATE_AUDIO:
@@ -1076,7 +1229,6 @@ player_task(gpointer arg)
 			dc_free(dc);
 			audio_output_all_close();
 			music_buffer_free(player_buffer);
-
 			player_command_finished(pc);
 			return NULL;
 

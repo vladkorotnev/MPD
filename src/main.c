@@ -57,6 +57,8 @@
 #include "songvec.h"
 #include "tag_pool.h"
 #include "mpd_error.h"
+#include "signal.h"
+#include "au_monitor.h"
 
 #ifdef ENABLE_INOTIFY
 #include "inotify_update.h"
@@ -86,9 +88,17 @@
 #include <ws2tcpip.h>
 #endif
 
+#ifdef WIMP_SUPPORT
+	#include "wimpmain.h"
+#endif
+
+#include "au_pl_task.h"
+
 enum {
-	DEFAULT_BUFFER_SIZE = 2048,
-	DEFAULT_BUFFER_BEFORE_PLAY = 10,
+//	DEFAULT_BUFFER_SIZE = 2048,
+//	DEFAULT_BUFFER_BEFORE_PLAY = 10,
+    DEFAULT_BUFFER_SIZE = 3072,
+    DEFAULT_BUFFER_BEFORE_PLAY = 15,
 };
 
 GThread *main_task;
@@ -322,6 +332,9 @@ int main(int argc, char *argv[])
 #endif
 }
 
+extern bool g_cache_disabled;
+int g_not_supports_over_192 = 0;
+
 int mpd_main(int argc, char *argv[])
 {
 	struct options options;
@@ -330,6 +343,8 @@ int mpd_main(int argc, char *argv[])
 	GError *error = NULL;
 	bool success;
 
+// '15 07.17 Dubby: Ignore SIGNAL PIPE Broken.
+	signal(SIGPIPE, SIG_IGN);
 	daemonize_close_stdin();
 
 #ifdef HAVE_LOCALE_H
@@ -437,11 +452,15 @@ int mpd_main(int argc, char *argv[])
 		g_error_free(error);
 		return EXIT_FAILURE;
 	}
-
+#ifdef SSD_CACHE
+        if(!g_cache_disabled)
+            fifo_ipc_init();
+#endif
 	initZeroconf();
 
 	player_create(global_player_control);
 
+#ifdef ORG
 	if (create_db) {
 		/* the database failed to load: recreate the
 		   database */
@@ -449,6 +468,7 @@ int mpd_main(int argc, char *argv[])
 		if (job == 0)
 			MPD_ERROR("directory update failed");
 	}
+#endif
 
 	if (!glue_state_file_init(&error)) {
 		g_warning("%s", error->message);
@@ -456,7 +476,12 @@ int mpd_main(int argc, char *argv[])
 		return EXIT_FAILURE;
 	}
 
+#ifdef ORG
 	success = config_get_bool(CONF_AUTO_UPDATE, false);
+#else
+	success = false;
+#endif
+
 #ifdef ENABLE_INOTIFY
 	if (success && mapper_has_music_directory())
 		mpd_inotify_init(config_get_unsigned(CONF_AUTO_UPDATE_DEPTH,
@@ -476,6 +501,24 @@ int mpd_main(int argc, char *argv[])
 	win32_app_started();
 #endif
 
+#ifdef WIMP_SUPPORT		
+		g_message("====================== STREAM SERVICE =========================");	
+		au_stream_serviceStart();
+		g_message("====================== PLAYLIST SERVICE =========================");			
+		au_pl_init();
+#endif
+		g_not_supports_over_192 = (access("/home/widealab/.config/model.w20", F_OK)==0 || access("/home/widealab/.config/model.s10", F_OK)==0);
+
+	if (access("/home/widealab/.config/model.w20", F_OK)==0 || access("/home/widealab/.config/model.n10", F_OK)==0)
+		au_monitor();
+
+		
+    g_message("======================MPD Start Main Loop=========================");
+	if(au_ipaddr_check() != 0)
+	{
+		system("/sbin/ifdown eth0;sleep 2;/sbin/ifup eth0 &");
+		g_message("===> get_ip fail <===");
+	}
 	/* run the main loop */
 	g_main_loop_run(main_loop);
 
@@ -523,6 +566,10 @@ int mpd_main(int argc, char *argv[])
 	decoder_plugin_deinit_all();
 #ifdef ENABLE_ARCHIVE
 	archive_plugin_deinit_all();
+#endif
+#ifdef SSD_CACHE
+        if(!g_cache_disabled)
+            fifo_ipc_finish();
 #endif
 	config_global_finish();
 	tag_pool_deinit();

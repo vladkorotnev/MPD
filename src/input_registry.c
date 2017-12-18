@@ -49,10 +49,14 @@
 #include "input/despotify_input_plugin.h"
 #endif
 
+#include "input/au_stream_plugin.h"
+
 #include <glib.h>
 
 const struct input_plugin *const input_plugins[] = {
 	&input_plugin_file,
+	&input_plugin_au_stream,		
+	&input_plugin_au_mms,			
 #ifdef ENABLE_ARCHIVE
 	&input_plugin_archive,
 #endif

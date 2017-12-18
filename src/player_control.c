@@ -88,8 +88,35 @@ pc_song_deleted(struct player_control *pc, const struct song *song)
 static void
 player_command_wait_locked(struct player_control *pc)
 {
+#if 0
+  bool wasenqueue = false;
 	while (pc->command != PLAYER_COMMAND_NONE)
-		g_cond_wait(main_cond, pc->mutex);
+	  {
+	    if(pc->command == PLAYER_COMMAND_QUEUE){
+	      wasenqueue=true;
+	      g_debug("\nPLAYER_COMMAND_QUEUE>>>");
+	    }
+	    else
+	      wasenqueue=false;
+	    g_cond_wait(main_cond, pc->mutex);
+	    if(wasenqueue){
+	      g_debug("PLAYER_COMMAND_QUEUE<<<%d\n",pc->command);
+	    }
+	  }
+#else
+	GTimeVal t;  
+	t.tv_sec = time(NULL) + 3;	
+	t.tv_usec = 0;	
+
+	while (pc->command != PLAYER_COMMAND_NONE)
+	{	
+		bool ret = false;
+		ret = g_cond_timed_wait(main_cond, pc->mutex, &t);
+		//if (ret == false)
+		//	g_message("===> player_command_wait_locked timeout");
+	}
+
+#endif	  
 }
 
 static void
@@ -115,8 +142,45 @@ pc_play(struct player_control *pc, struct song *song)
 {
 	assert(song != NULL);
 
+	//Leo , there was a enque operation here in the older source.
+	//let's remove it and see.
 	player_lock(pc);
+#ifdef WIDEA_FADING
+	if(g_half_fading
+		&&pc.cross_fade_seconds==0)
+	{
+		//when corssfading is 0 sec, stop and play it(no delay)
+		g_half_fading = false;
+	}
+		
+	if(g_half_fading) 
+	/*
+	call dc_stop and let dc play cached chunk then fade in, just like when done playing
+	check do_play() function of player_thread.c
+	besides this, we need to control the buffersize of mpd,
+	otherwise, the crossfading time will be too long for the expectation of 'next/prev' command
+	because the way we do crossfading is like crossfading when done playing, 
+	so dc needs to consume all buffers. if buffer size is too big, the time will be long.
+	the cost is we don't support long crossfading like 5~10 sec.
+	*/
+	{		
+		pc.command = PLAYER_COMMAND_NONE;
+		g_half_fading = false;
+		char *uri;
+		uri = song_get_uri(song);
+		g_debug("*******pc_play function:\"%s\"", uri);
+		g_free(uri);
 
+		//after stop dc, it will start next , so pc.next_song should not be null	
+		player_command_locked(PLAYER_COMMAND_DCCANCEL);
+		pc_enqueue_song_locked(song);			
+		player_command_locked(PLAYER_COMMAND_DCSTOP);
+		player_unlock();
+		idle_add(IDLE_PLAYER);
+		return ;
+	}
+	else  //otherwise stop the song immediately
+#endif
 	if (pc->state != PLAYER_STATE_STOP)
 		player_command_locked(pc, PLAYER_COMMAND_STOP);
 
@@ -198,12 +262,26 @@ pc_set_pause(struct player_control *pc, bool pause_flag)
 
 	case PLAYER_STATE_PLAY:
 		if (pause_flag)
+                    {
+                        g_debug(">>>>>>>>PAUSE");
+                        //update_opstamp(); // do it in command.c
 			pc_pause_locked(pc);
+			//clear_sample_rate();  //clean sample rate for airplay, it conflict with sr pause
+                    }
 		break;
 
 	case PLAYER_STATE_PAUSE:
 		if (!pause_flag)
-			pc_pause_locked(pc);
+                    {
+                        g_debug(">>>>>>>>UNPAUSE");
+                        //update_opstamp();  //do it in command.c
+#ifdef SSD_CACHE
+                        //leo: don't need now, we send stop command sometimes, if gsamplerate is different, we better resend the cmd
+			//get_sample_rate_from_balster(); //get current sr from blaster.
+                        restartAirport();
+#endif
+                        pc_pause_locked(pc);
+                    }
 		break;
 	}
 
@@ -214,6 +292,7 @@ void
 pc_get_status(struct player_control *pc, struct player_status *status)
 {
 	player_lock(pc);
+
 	player_command_locked(pc, PLAYER_COMMAND_REFRESH);
 
 	status->state = pc->state;

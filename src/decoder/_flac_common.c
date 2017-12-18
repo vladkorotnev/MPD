@@ -207,7 +207,9 @@ flac_common_write(struct flac_data *data, const FLAC__Frame * frame,
 	unsigned bit_rate;
 
 	if (!data->initialized && !flac_got_first_frame(data, &frame->header))
+	{	
 		return FLAC__STREAM_DECODER_WRITE_STATUS_ABORT;
+	}
 
 	size_t buffer_size = frame->header.blocksize * data->frame_size;
 	buffer = pcm_buffer_get(&data->buffer, buffer_size);

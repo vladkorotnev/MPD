@@ -83,6 +83,9 @@ bool
 spl_append_uri(const char *file, const char *utf8file, GError **error_r);
 
 bool
+spl_append_file(const char *file, const char *utf8file, GError **error_r);
+
+bool
 spl_rename(const char *utf8from, const char *utf8to, GError **error_r);
 
 #endif

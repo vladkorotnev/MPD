@@ -112,7 +112,9 @@ bool volume_level_change(unsigned volume)
 	volume_software_set = volume;
 
 	idle_add(IDLE_MIXER);
-
+#ifdef IR_VOLUME
+	send_volume_cmd(volume);
+#endif
 	return hardware_volume_change(volume);
 }
 

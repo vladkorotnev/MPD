@@ -35,6 +35,9 @@
 
 #define SONG_MTIME "mtime"
 #define SONG_END "song_end"
+#ifdef FILESIZE
+#define SONG_SIZE 	"size"
+#endif
 
 static GQuark
 song_save_quark(void)
@@ -56,6 +59,9 @@ song_save(FILE *fp, const struct song *song)
 		tag_save(fp, song->tag);
 
 	fprintf(fp, SONG_MTIME ": %li\n", (long)song->mtime);
+#ifdef FILESIZE
+	fprintf(fp, SONG_SIZE ": %u\n",song->size);
+#endif
 	fprintf(fp, SONG_END "\n");
 }
 
@@ -82,6 +88,10 @@ song_load(FILE *fp, struct directory *parent, const char *uri,
 	char *line, *colon;
 	enum tag_type type;
 	const char *value;
+	bool skip_tidal=false;
+
+	if(is_tidal(uri))
+		skip_tidal=true;
 
 	while ((line = read_text_line(fp, buffer)) != NULL &&
 	       strcmp(line, SONG_END) != 0) {
@@ -99,6 +109,9 @@ song_load(FILE *fp, struct directory *parent, const char *uri,
 		*colon++ = 0;
 		value = strchug_fast_c(colon);
 
+		if(skip_tidal==true)
+			continue;
+
 		if ((type = tag_name_parse(line)) != TAG_NUM_OF_ITEM_TYPES) {
 			if (!song->tag) {
 				song->tag = tag_new();
@@ -115,7 +128,13 @@ song_load(FILE *fp, struct directory *parent, const char *uri,
 			song->tag->time = atoi(value);
 		} else if (strcmp(line, SONG_MTIME) == 0) {
 			song->mtime = atoi(value);
-		} else if (strcmp(line, "Range") == 0) {
+		} 
+#ifdef FILESIZE
+		else if (strcmp(line, SONG_SIZE) == 0) {
+				song->size = atoi(value);
+			}
+#endif
+		else if (strcmp(line, "Range") == 0) {
 			char *endptr;
 
 			song->start_ms = strtoul(value, &endptr, 10);

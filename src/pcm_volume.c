@@ -98,9 +98,9 @@ pcm_volume_change_24(int32_t *buffer, unsigned num_samples, int volume)
 #ifdef __i386__
 		/* assembly version for i386 */
 		int32_t sample = *buffer;
-
-		sample = pcm_volume_sample_24(sample, volume,
-					      pcm_volume_dither());
+		*buffer++ = pcm_volume_sample_24(sample, volume, 0);
+		//sample = pcm_volume_sample_24(sample, volume,0);
+                //					      pcm_volume_dither());
 #else
 		/* portable version */
 		int64_t sample = *buffer;
@@ -109,7 +109,7 @@ pcm_volume_change_24(int32_t *buffer, unsigned num_samples, int volume)
 			  PCM_VOLUME_1 / 2)
 			/ PCM_VOLUME_1;
 #endif
-		*buffer++ = pcm_range(sample, 24);
+                //*buffer++ = pcm_range(sample, 24);
 		--num_samples;
 	}
 }
@@ -149,7 +149,6 @@ pcm_volume(void *buffer, int length,
 		memset(buffer, 0, length);
 		return true;
 	}
-
 	switch (format->format) {
 	case SAMPLE_FORMAT_S8:
 		pcm_volume_change_8((int8_t *)buffer, length, volume);
@@ -169,7 +168,10 @@ pcm_volume(void *buffer, int length,
 		pcm_volume_change_32((int32_t*)buffer, length / 4,
 				     volume);
 		return true;
-
+#ifdef WIDEA_FADING
+	case 32:	//leo, for 32 bit file. disable volume control
+		return true;
+#endif
 	default:
 		return false;
 	}

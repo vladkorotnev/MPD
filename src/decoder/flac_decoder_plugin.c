@@ -43,7 +43,6 @@ flac_read_cb(G_GNUC_UNUSED const FLAC__StreamDecoder *fd,
 {
 	struct flac_data *data = fdata;
 	size_t r;
-
 	r = decoder_read(data->decoder, data->input_stream,
 			 (void *)buf, *bytes);
 	*bytes = r;
@@ -196,7 +195,7 @@ flac_write_cb(const FLAC__StreamDecoder *dec, const FLAC__Frame *frame,
 {
 	struct flac_data *data = (struct flac_data *) vdata;
 	FLAC__uint64 nbytes = 0;
-
+	FLAC__StreamDecoderWriteStatus ret;
 	if (FLAC__stream_decoder_get_decode_position(dec, &nbytes)) {
 		if (data->position > 0 && nbytes > data->position) {
 			nbytes -= data->position;
@@ -207,8 +206,9 @@ flac_write_cb(const FLAC__StreamDecoder *dec, const FLAC__Frame *frame,
 		}
 	} else
 		nbytes = 0;
-
-	return flac_common_write(data, frame, buf, nbytes);
+		
+	ret = flac_common_write(data, frame, buf, nbytes);
+	return ret;
 }
 
 static struct tag *
@@ -305,7 +305,6 @@ flac_decoder_loop(struct flac_data *data, FLAC__StreamDecoder *flac_dec,
 		if (t_end != 0 && data->next_frame >= t_end)
 			/* end of this sub track */
 			break;
-
 		if (!FLAC__stream_decoder_process_single(flac_dec)) {
 			cmd = decoder_get_command(decoder);
 			if (cmd != DECODE_COMMAND_SEEK)
@@ -327,7 +326,7 @@ flac_decode_internal(struct decoder * decoder,
 	FLAC__StreamDecoder *flac_dec;
 	struct flac_data data;
 	const char *err = NULL;
-
+	g_debug("flac decode internal");
 	flac_dec = flac_decoder_new();
 	if (flac_dec == NULL)
 		return;
@@ -380,7 +379,6 @@ flac_decode_internal(struct decoder * decoder,
 	}
 
 	flac_decoder_loop(&data, flac_dec, 0, 0);
-
 fail:
 	flac_data_deinit(&data);
 	FLAC__stream_decoder_delete(flac_dec);

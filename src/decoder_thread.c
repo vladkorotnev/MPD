@@ -37,6 +37,7 @@
 #include <glib.h>
 
 #include <unistd.h>
+#include "wimpmain.h"
 
 #undef G_LOG_DOMAIN
 #define G_LOG_DOMAIN "decoder_thread"
@@ -111,6 +112,9 @@ decoder_input_stream_open(struct decoder_control *dc, const char *uri)
 	return is;
 }
 
+#include <sys/stat.h>
+#include <errno.h>
+
 static bool
 decoder_stream_decode(const struct decoder_plugin *plugin,
 		      struct decoder *decoder,
@@ -132,6 +136,10 @@ decoder_stream_decode(const struct decoder_plugin *plugin,
 	input_stream_seek(input_stream, 0, SEEK_SET, NULL);
 
 	decoder_unlock(decoder->dc);
+
+#ifdef BLASTER_SR
+    decoder->dc->isDSD = DSD_TYPE_NONE;
+#endif
 
 	decoder_plugin_stream_decode(plugin, decoder, input_stream);
 
@@ -161,6 +169,7 @@ decoder_file_decode(const struct decoder_plugin *plugin,
 
 	decoder_unlock(decoder->dc);
 
+	g_debug("decoder_plugin_file_decode:%s=>%s",plugin->name,path);
 	decoder_plugin_file_decode(plugin, decoder, path);
 
 	decoder_lock(decoder->dc);
@@ -262,7 +271,9 @@ decoder_run_stream_fallback(struct decoder *decoder, struct input_stream *is)
 {
 	const struct decoder_plugin *plugin;
 
-	plugin = decoder_plugin_from_name("mad");
+//	plugin = decoder_plugin_from_name("mad");
+
+	plugin = decoder_plugin_from_name("ffmpeg");
 	return plugin != NULL && plugin->stream_decode != NULL &&
 		decoder_stream_decode(plugin, decoder, is);
 }
@@ -325,6 +336,7 @@ decoder_load_replay_gain(struct decoder *decoder, const char *path_fs)
  * Try decoding a file.
  */
 static bool
+
 decoder_run_file(struct decoder *decoder, const char *path_fs)
 {
 	struct decoder_control *dc = decoder->dc;
@@ -339,9 +351,10 @@ decoder_run_file(struct decoder *decoder, const char *path_fs)
 	decoder_load_replay_gain(decoder, path_fs);
 
 	while ((plugin = decoder_plugin_from_suffix(suffix, plugin)) != NULL) {
+		g_debug("suffix %s : plugin : %s",suffix,plugin->name);
 		if (plugin->file_decode != NULL) {
 			decoder_lock(dc);
-
+			
 			if (decoder_file_decode(plugin, decoder, path_fs))
 				return true;
 
@@ -349,6 +362,8 @@ decoder_run_file(struct decoder *decoder, const char *path_fs)
 		} else if (plugin->stream_decode != NULL) {
 			struct input_stream *input_stream;
 			bool success;
+			
+			g_debug("decoder_run_file: 2=>%s",path_fs);
 
 			input_stream = decoder_input_stream_open(dc, path_fs);
 			if (input_stream == NULL)
@@ -398,11 +413,14 @@ decoder_run_song(struct decoder_control *dc,
 	decoder_command_finished_locked(dc);
 
 	pcm_convert_init(&decoder.conv_state);
-
+	g_debug("Decoder_run_song start: %s is %s",
+					uri,song_is_file(song)?"song":"stream");
+	
 	ret = song_is_file(song)
 		? decoder_run_file(&decoder, uri)
 		: decoder_run_stream(&decoder, uri);
 
+	g_debug("Decoder_run_song end");
 	decoder_unlock(dc);
 
 	pcm_convert_deinit(&decoder.conv_state);
@@ -424,13 +442,26 @@ decoder_run_song(struct decoder_control *dc,
 	decoder_lock(dc);
 
 	dc->state = ret ? DECODE_STATE_STOP : DECODE_STATE_ERROR;
-}
 
+	// '14.10.15 Dubby : If stream decoding failes, racing condition appears at player_wait_decoder()
+	//if(dc->state == DECODE_STATE_ERROR && !song_is_file(song))
+	// '14.11.11 Dubby : For test mpd deadlock issue.
+	if(dc->state == DECODE_STATE_ERROR)
+	{	
+		g_message("decoder_run_song : free mutex force\n");
+		g_cond_signal(dc->client_cond);
+	}	
+}
+extern bool g_cache_disabled;
 static void
 decoder_run(struct decoder_control *dc)
 {
 	const struct song *song = dc->song;
 	char *uri;
+#ifdef SSD_CACHE
+	char cacheUri[MPD_PATH_MAX]={0};
+	char hashUri[MPD_PATH_MAX]={0};
+#endif
 
 	assert(song != NULL);
 
@@ -438,6 +469,8 @@ decoder_run(struct decoder_control *dc)
 		uri = map_song_fs(song);
 	else
 		uri = song_get_uri(song);
+		//uri = song_get_uri2(song);
+	g_message("==> decoder_run :[\"%s\"]",uri);
 
 	if (uri == NULL) {
 		dc->state = DECODE_STATE_ERROR;
@@ -445,7 +478,30 @@ decoder_run(struct decoder_control *dc)
 		return;
 	}
 
-	decoder_run_song(dc, song, uri);
+#ifdef SSD_CACHE
+	if(g_cache_disabled){
+            decoder_run_song(dc, song, uri);
+        }else{
+		mapper_get_cache_url(uri,cacheUri);
+		mapper_get_cache_hashuri(cacheUri,hashUri);
+		if(is_nas_lnk(uri)==false && isRegularAndReadable(hashUri) && verifyCache(uri,cacheUri))
+		  { 	
+			//cacheExisted(cacheUri);
+			write_render_pipe(cacheUri,FIFO_UPDATE|PLAYING_FLAG);
+			g_message("Decoder>>Play cached file:[\"%s\"]",hashUri);
+			decoder_run_song(dc, song, hashUri);
+		  }
+		else
+		  {  
+
+			write_render_pipe(cacheUri,FIFO_ADD|PLAYING_FLAG);
+			g_message("Decoder>>Play original file:[\"%s\"]",uri);
+			decoder_run_song(dc, song, uri);
+		  }
+        }
+#else
+	decoder_run_song(dc, song, uri);	
+#endif
 	g_free(uri);
 
 }

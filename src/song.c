@@ -42,6 +42,9 @@ song_alloc(const char *uri, struct directory *parent)
 	memcpy(song->uri, uri, uri_length + 1);
 	song->parent = parent;
 	song->mtime = 0;
+#ifdef FILESIZE
+	song->size = 0;
+#endif
 	song->start_ms = song->end_ms = 0;
 
 	return song;

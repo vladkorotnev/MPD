@@ -143,6 +143,17 @@ struct AudioOutputPlugin {
 	 * true for continue to pause
 	 */
 	bool (*pause)(AudioOutput *data);
+	
+	/**
+	 * If set, returns the device's preferred output format in
+	 * non-exclusive mode.
+	 */
+	AudioFormat (*device_format)(AudioOutput *data);
+	
+	/*
+	 * Returns the device's output latency in seconds
+	 */
+	double (*latency)(AudioOutput *data);
 
 	/**
 	 * The mixer plugin associated with this output plugin.  This
@@ -200,5 +211,11 @@ ao_plugin_cancel(AudioOutput &ao) noexcept;
 
 bool
 ao_plugin_pause(AudioOutput &ao);
+
+AudioFormat
+ao_plugin_device_format(AudioOutput &ao);
+
+double
+ao_plugin_latency(AudioOutput &ao);
 
 #endif

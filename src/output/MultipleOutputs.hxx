@@ -132,6 +132,20 @@ public:
 	 * should be returned
 	 */
 	void Open(const AudioFormat audio_format, MusicBuffer &_buffer);
+	
+	/**
+	 * iterates through all outputs, and returns the first valid device
+	 * format set. If no output has set a format, return an undefined
+	 * format (AudioFormat::Undefined())
+	 */
+	AudioFormat DeviceFormat();
+	
+	/**
+	 * iterates through all outputs, and returns the highest reported
+	 * device latency (in seconds).
+	 *
+	 */
+	double Latency();
 
 	/**
 	 * Closes all audio outputs.

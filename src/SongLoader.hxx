@@ -22,6 +22,8 @@
 
 #include "check.h"
 #include "Compiler.h"
+#include "ReplayGainInfo.hxx"
+#include "MixRampInfo.hxx"
 
 #include <cstddef>
 
@@ -40,6 +42,8 @@ struct LocatedUri;
  */
 class SongLoader {
 	const Client *const client;
+	const ReplayGainInfo* replayGainInfo = 0;
+	const MixRampInfo* mixRampInfo = 0;
 
 #ifdef ENABLE_DATABASE
 	const Database *const db;
@@ -55,8 +59,10 @@ public:
 		   const Storage *_storage)
 		:client(&_client), db(_db), storage(_storage) {}
 #else
-	explicit SongLoader(const Client &_client)
-		:client(&_client) {}
+	explicit SongLoader(const Client &_client, const ReplayGainInfo* _replyGainInfo = 0, const MixRampInfo* _mixRampInfo = 0)
+		:client(&_client)
+	  ,replayGainInfo(_replyGainInfo)
+    ,mixRampInfo(_mixRampInfo) {}
 	explicit SongLoader(std::nullptr_t, std::nullptr_t)
 		:client(nullptr) {}
 #endif

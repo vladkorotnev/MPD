@@ -276,6 +276,8 @@ class AlsaOutput final
 
 	std::exception_ptr error;
 
+	AudioFormat device_format;
+
 public:
 	AlsaOutput(EventLoop &loop, const ConfigBlock &block);
 
@@ -301,6 +303,7 @@ public:
 	size_t Play(const void *chunk, size_t size);
 	void Drain();
 	void Cancel();
+	AudioFormat DeviceFormat();
 
 private:
 	/**
@@ -438,6 +441,10 @@ AlsaOutput::AlsaOutput(EventLoop &loop, const ConfigBlock &block)
 	if (!block.GetBlockValue("auto_format", true))
 		mode |= SND_PCM_NO_AUTO_FORMAT;
 #endif
+
+	device_format.sample_rate = 44100;
+	device_format.channels = 2;
+	device_format.format = SampleFormat::FLOAT;
 }
 
 inline AlsaOutput *
@@ -1170,6 +1177,11 @@ AlsaOutput::Drain()
 		cond.wait(mutex);
 }
 
+AudioFormat AlsaOutput::DeviceFormat()
+{
+	return device_format;
+}
+
 inline void
 AlsaOutput::CancelInternal()
 {
@@ -1347,6 +1359,7 @@ const struct AudioOutputPlugin alsa_output_plugin = {
 	&Wrapper::Drain,
 	&Wrapper::Cancel,
 	nullptr,
-
+	&Wrapper::DeviceFormat,
+	nullptr,
 	&alsa_mixer_plugin,
 };

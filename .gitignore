@@ -13,6 +13,8 @@
 .stgit*
 .deps
 .dirstamp
+cmake-build-debug/
+.idea/
 
 tags
 
@@ -86,3 +88,6 @@ tags
 /mpd-*/
 
 __pycache__/
+win32/
+
+.DS_Store

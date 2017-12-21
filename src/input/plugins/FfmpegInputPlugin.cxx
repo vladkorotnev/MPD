@@ -90,6 +90,8 @@ input_ffmpeg_open(const char *uri,
 	    !StringStartsWith(uri, "rtsp://") &&
 	    !StringStartsWith(uri, "rtmp://") &&
 	    !StringStartsWith(uri, "rtmpt://") &&
+      !StringStartsWith(uri, "http://") &&
+      !StringStartsWith(uri, "https://") &&
 	    !StringStartsWith(uri, "rtmps://"))
 		return nullptr;
 
@@ -106,7 +108,7 @@ FfmpegInputStream::Read(void *ptr, size_t read_size)
 {
 	auto result = avio_read(h, (unsigned char *)ptr, read_size);
 	if (result <= 0) {
-		if (result < 0)
+		if (result < 0 && result != AVERROR_EOF)
 			throw MakeFfmpegError(result, "avio_read() failed");
 
 		eof = true;

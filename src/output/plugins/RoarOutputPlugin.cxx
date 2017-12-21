@@ -361,5 +361,6 @@ const struct AudioOutputPlugin roar_output_plugin = {
 	nullptr,
 	&Wrapper::Cancel,
 	nullptr,
+	nullptr,
 	&roar_mixer_plugin,
 };

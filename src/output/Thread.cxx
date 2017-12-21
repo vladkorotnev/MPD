@@ -25,6 +25,7 @@
 #include "Domain.hxx"
 #include "pcm/PcmMix.hxx"
 #include "notify.hxx"
+#include "UDPServer.hxx"
 #include "filter/FilterInternal.hxx"
 #include "filter/plugins/ConvertFilterPlugin.hxx"
 #include "filter/plugins/ReplayGainFilterPlugin.hxx"
@@ -46,6 +47,8 @@
 
 #include <assert.h>
 #include <string.h>
+#include <vector>
+#include <cmath>
 
 void
 AudioOutputControl::CommandFinished() noexcept
@@ -129,6 +132,17 @@ AudioOutputControl::InternalOpen2(const AudioFormat in_audio_format)
 	}
 }
 
+AudioFormat AudioOutput::DeviceFormat() {
+	return plugin.device_format(this);
+}
+
+double AudioOutput::Latency() {
+	if (plugin.latency == nullptr) {
+		return 0.0;
+	}
+	return plugin.latency(this);
+}
+
 void
 AudioOutput::OpenOutputAndConvert(AudioFormat desired_audio_format)
 {
@@ -141,7 +155,7 @@ AudioOutput::OpenOutputAndConvert(AudioFormat desired_audio_format)
 							  name, plugin.name));
 	}
 
-	FormatDebug(output_domain,
+	FormatInfo(output_domain,
 		    "opened plugin=%s name=\"%s\" audio_format=%s",
 		    plugin.name, name,
 		    ToString(out_audio_format).c_str());
@@ -242,10 +256,18 @@ AudioOutputControl::InternalOpen(const AudioFormat in_audio_format,
 	}
 
 	if (f != in_audio_format || f != output->out_audio_format)
-		FormatDebug(output_domain, "converting in=%s -> f=%s -> out=%s",
+		FormatInfo(output_domain, "converting in=%s -> f=%s -> out=%s",
 			    ToString(in_audio_format).c_str(),
 			    ToString(f).c_str(),
 			    ToString(output->out_audio_format).c_str());
+
+	FormatInfo(output_domain, "resetting output clock.");
+
+	auto now = std::chrono::system_clock::now();
+	auto now_ms = std::chrono::time_point_cast<std::chrono::milliseconds>(now);
+	auto epoch = now_ms.time_since_epoch();
+	auto value = std::chrono::duration_cast<std::chrono::milliseconds>(epoch);
+	start_time = value.count();
 }
 
 inline void
@@ -349,8 +371,32 @@ AudioOutputControl::PlayChunk() noexcept
 
 		try {
 			const ScopeUnlock unlock(mutex);
-			nbytes = ao_plugin_play(*output, data.data, data.size);
-			assert(nbytes <= data.size);
+            nbytes = ao_plugin_play(*output, data.data, data.size);
+            assert(nbytes <= data.size);
+            if (output->udp_server != nullptr) {
+				auto bins = source.PeekBins();
+				
+				if (source.isCrossFading()) {
+					auto other_bins = source.PeekOtherBins();
+					if (other_bins.size() == bins.size()) {
+						for (size_t i = 0; i < bins.size(); i++) {
+							float sum = (float)(10.0 * log10(pow(10, bins[i]/10.0) + pow(10, other_bins[i]/10.0)));
+							bins[i] = sum;
+						}
+					}
+				}
+                if (!bins.empty()) {
+                    double wall_time = std::chrono::duration_cast<std::chrono::duration<double>>(std::chrono::system_clock::now().time_since_epoch()).count();
+                    double latency = client.OutputLatency();
+                    std::vector<double> output_vector;
+					
+                    output_vector.push_back(wall_time + latency);
+					output_vector.insert(output_vector.end(), bins.begin(), bins.end());
+					
+					output->udp_server->Write(&output_vector[0], output_vector.size() * sizeof(double));
+					bins.clear();
+                }
+            }
 		} catch (const std::runtime_error &e) {
 			FormatError(e, "\"%s\" [%s] failed to play",
 				    GetName(), output->plugin.name);

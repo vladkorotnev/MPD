@@ -721,6 +721,6 @@ const struct AudioOutputPlugin oss_output_plugin = {
 	nullptr,
 	&Wrapper::Cancel,
 	nullptr,
-
+	nullptr,
 	&oss_mixer_plugin,
 };

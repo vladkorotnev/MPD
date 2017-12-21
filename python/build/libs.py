@@ -3,6 +3,7 @@ from build.zlib import ZlibProject
 from build.autotools import AutotoolsProject
 from build.ffmpeg import FfmpegProject
 from build.boost import BoostProject
+from build.cmake import CMakeProject
 
 libogg = AutotoolsProject(
     'http://downloads.xiph.org/releases/ogg/libogg-1.3.2.tar.xz',
@@ -46,7 +47,7 @@ libid3tag = AutotoolsProject(
     'e5808ad997ba32c498803822078748c3',
     'lib/libid3tag.a',
     ['--disable-shared', '--enable-static'],
-    autogen=True,
+    autogen=False,
 )
 
 libmad = AutotoolsProject(
@@ -73,10 +74,11 @@ ffmpeg = FfmpegProject(
     '1998de1ab32616cbf2ff86efc3f1f26e76805ec5dc51e24c041c79edd8262785',
     'lib/libavcodec.a',
     [
-        '--disable-shared', '--enable-static',
+        '--disable-shared', 
+		'--enable-static',
         '--enable-gpl',
         '--enable-small',
-        '--disable-pthreads',
+        #'--disable-pthreads',
         '--disable-programs',
         '--disable-doc',
         '--disable-avdevice',
@@ -84,27 +86,28 @@ ffmpeg = FfmpegProject(
         '--disable-swscale',
         '--disable-postproc',
         '--disable-avfilter',
-        '--disable-network',
-        '--disable-encoders',
-        '--disable-protocols',
         '--disable-outdevs',
+        '--disable-encoders',
         '--disable-filters',
+		'--disable-iconv',
+		'--disable-bzlib',
+		'--disable-lzma'
     ],
 )
 
 curl = AutotoolsProject(
-    'http://curl.haxx.se/download/curl-7.54.1.tar.lzma',
-    '2b7af34d4900887e0b4e0a9f545b9511ff774d07151ae4976485060d3e1bdb6e',
+    'https://curl.haxx.se/download/curl-7.57.0.tar.bz2',
+    'c92fe31a348eae079121b73884065e600c533493eb50f1f6cee9c48a3f454826',
     'lib/libcurl.a',
     [
         '--disable-shared', '--enable-static',
         '--disable-debug',
-        '--enable-http',
+        '--enable-http', '--without-nghttp2',
         '--enable-ipv6',
         '--disable-ftp', '--disable-file',
         '--disable-ldap', '--disable-ldaps',
         '--disable-rtsp', '--disable-proxy', '--disable-dict', '--disable-telnet',
-        '--disable-tftp', '--disable-pop3', '--disable-imap', '--disable-smtp',
+        '--disable-tftp', '--disable-pop3', '--disable-imap', '--disable-smtp', '--without-librtmp',
         '--disable-gopher',
         '--disable-manual',
         '--disable-threaded-resolver', '--disable-verbose', '--disable-sspi',
@@ -117,4 +120,35 @@ boost = BoostProject(
     'http://downloads.sourceforge.net/project/boost/boost/1.64.0/boost_1_64_0.tar.bz2',
     '7bcc5caace97baa948931d712ea5f37038dbb1c5d89b43ad4def4ed7cb683332',
     'include/boost/version.hpp',
+)
+
+libsamplerate = AutotoolsProject(
+    'http://www.mega-nerd.com/SRC/libsamplerate-0.1.9.tar.gz',
+    '0a7eb168e2f21353fb6d84da152e4512126f7dc48ccb0be80578c565413444c1',
+    'lib/libsamplerate.a',
+    ['--disable-shared', '--enable-static'],
+    autogen=False,       
+)
+
+libsoundio = CMakeProject(
+    'https://github.com/elan/libsoundio/archive/master.tar.gz',
+    '1731ccc4799fdc94549b03093cb4f7c9f3e617fab0641b091f62b3a8cc246062',
+    'lib/libsoundio.a',
+    ['-DBUILD_TESTS=OFF', '-DBUILD_EXAMPLE_PROGRAMS=OFF', '-DBUILD_STATIC_LIBS=ON', '-DBUILD_DYNAMIC_LIBS=OFF'],
+    name='libsoundio',
+    version='921195a',
+    base='libsoundio-master'
+)
+
+fftw = AutotoolsProject(
+    'http://www.fftw.org/fftw-3.3.6-pl2.tar.gz',
+    'a5de35c5c824a78a058ca54278c706cdf3d4abba1c56b63531c2cb05f5d57da2',
+    'lib/libfftw3f.a',
+    [
+        '--enable-static', '--disable-shared', 
+         '--enable-sse', '--enable-sse2', '--enable-avx', '--enable-avx2', '--enable-single',
+         '--with-our-malloc'
+    ],
+    name='fftw',
+    version='3.3.6-pl2'
 )

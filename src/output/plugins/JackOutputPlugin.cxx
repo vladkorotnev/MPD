@@ -691,4 +691,5 @@ const struct AudioOutputPlugin jack_output_plugin = {
 	nullptr,
 	&Wrapper::Pause,
 	nullptr,
+	nullptr,
 };

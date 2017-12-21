@@ -259,4 +259,6 @@ const struct AudioOutputPlugin fifo_output_plugin = {
 	&Wrapper::Cancel,
 	nullptr,
 	nullptr,
+	nullptr,
+	nullptr,
 };

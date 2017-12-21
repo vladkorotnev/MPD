@@ -40,9 +40,9 @@ class FfmpegProject(Project):
             '--extra-libs=' + toolchain.libs,
             '--ar=' + toolchain.ar,
             '--ranlib=' + toolchain.ranlib,
-            '--enable-cross-compile',
-            '--arch=' + arch,
-            '--target-os=' + target_os,
+            #'--enable-cross-compile',
+            #'--arch=' + arch,
+            #'--target-os=' + target_os,
             '--prefix=' + toolchain.install_prefix,
         ] + self.configure_args
 

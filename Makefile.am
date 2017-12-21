@@ -46,6 +46,7 @@ src_mpd_LDADD = \
 	$(AVAHI_LIBS) \
 	$(LIBWRAP_LDFLAGS) \
 	$(SQLITE_LIBS) \
+  	$(FFTW_LIBS) \
 	$(DECODER_LIBS) \
 	$(INPUT_LIBS) \
 	$(ARCHIVE_LIBS) \
@@ -350,10 +351,10 @@ win32/res/mpd.$(OBJEXT): %.$(OBJEXT): %.rc
 	$(WINDRES) -i $< -o $@
 
 if HAVE_WINDOWS
-noinst_DATA = win32/res/mpd.rc
+#noinst_DATA = win32/res/mpd.rc
 
-EXTRA_src_mpd_DEPENDENCIES = win32/res/mpd.$(OBJEXT)
-src_mpd_LDFLAGS = -Wl,win32/res/mpd.$(OBJEXT)
+#EXTRA_src_mpd_DEPENDENCIES = win32/res/mpd.$(OBJEXT)
+#src_mpd_LDFLAGS = -Wl,win32/res/mpd.$(OBJEXT)
 endif
 
 #
@@ -997,6 +998,7 @@ libdecoder_a_CPPFLAGS = $(AM_CPPFLAGS) \
 
 DECODER_LIBS = \
 	libdecoder.a \
+	$(FFTW_LIBS) \
 	$(XIPH_LIBS) \
 	$(VORBIS_LIBS) $(TREMOR_LIBS) \
 	$(FLAC_LIBS) \
@@ -1023,6 +1025,12 @@ libdecoder_a_SOURCES += \
 	src/decoder/plugins/DsfDecoderPlugin.hxx \
 	src/decoder/plugins/DsdLib.cxx \
 	src/decoder/plugins/DsdLib.hxx
+endif
+
+if ENABLE_FFTW
+libdecoder_a_SOURCES += \
+	src/decoder/SpectrumAnalyzer.cxx \
+	src/decoder/SpectrumAnalyzer.hxx
 endif
 
 if ENABLE_MAD
@@ -1348,6 +1356,7 @@ libinput_a_SOURCES += \
 endif
 
 liboutput_plugins_a_CPPFLAGS = $(AM_CPPFLAGS) \
+	$(SOUNDIO_CFLAGS) \
 	$(AO_CFLAGS) \
 	$(ALSA_CFLAGS) \
 	$(JACK_CFLAGS) \
@@ -1362,6 +1371,7 @@ OUTPUT_LIBS = \
 	liboutput_plugins.a \
 	$(LIBWRAP_LDFLAGS) \
 	$(AO_LIBS) \
+	$(SOUNDIO_LIBS) \
 	$(ALSA_LIBS) \
 	$(ROAR_LIBS) \
 	$(JACK_LIBS) \
@@ -1387,12 +1397,15 @@ OUTPUT_API_SRC = \
 	src/output/OutputCommand.cxx src/output/OutputCommand.hxx \
 	src/output/OutputPlugin.cxx src/output/OutputPlugin.hxx \
 	src/output/Finish.cxx \
-	src/output/Init.cxx
+	src/output/Init.cxx \
+	src/output/UDPServer.cxx
 
 liboutput_plugins_a_SOURCES = \
 	src/output/Timer.cxx src/output/Timer.hxx \
 	src/output/plugins/NullOutputPlugin.cxx \
-	src/output/plugins/NullOutputPlugin.hxx
+	src/output/plugins/NullOutputPlugin.hxx \
+  src/output/plugins/UdpOutputPlugin.hxx \
+  src/output/plugins/UdpOutputPlugin.cxx
 
 MIXER_LIBS = \
 	libmixer_plugins.a \
@@ -1451,6 +1464,13 @@ if ENABLE_AO
 liboutput_plugins_a_SOURCES += \
 	src/output/plugins/AoOutputPlugin.cxx \
 	src/output/plugins/AoOutputPlugin.hxx
+endif
+
+if ENABLE_SOUNDIO
+liboutput_plugins_a_SOURCES += \
+	src/output/plugins/SoundIOOutputPlugin.cxx \
+	src/output/plugins/SoundIOOutputPlugin.hxx
+libmixer_plugins_a_SOURCES += src/mixer/plugins/SoundIOMixerPlugin.cxx
 endif
 
 if HAVE_FIFO

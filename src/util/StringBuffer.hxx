@@ -42,17 +42,15 @@ public:
 	typedef T &reference;
 	typedef T *pointer;
 	typedef const T *const_pointer;
+	typedef const_pointer const_iterator;
 	typedef size_t size_type;
 
 	static constexpr value_type SENTINEL = '\0';
 
 protected:
-	typedef std::array<value_type, CAPACITY> Array;
-	Array the_data;
+	std::array<value_type, CAPACITY> the_data;
 
 public:
-	typedef typename Array::const_iterator const_iterator;
-
 	constexpr size_type capacity() const {
 		return CAPACITY;
 	}
@@ -74,7 +72,7 @@ public:
 	}
 
 	constexpr value_type front() const {
-		return the_data.front();
+		return c_str()[0];
 	}
 
 	/**
@@ -92,11 +90,11 @@ public:
 	}
 
 	constexpr const_iterator begin() const {
-		return the_data.begin();
+		return the_data;
 	}
 
 	constexpr const_iterator end() const {
-		return the_data.end();
+		return the_data + capacity();
 	}
 
 	constexpr operator const_pointer() const {

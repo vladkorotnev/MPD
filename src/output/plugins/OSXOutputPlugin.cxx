@@ -694,4 +694,5 @@ const struct AudioOutputPlugin osx_output_plugin = {
 	nullptr,
 	nullptr,
 	nullptr,
+	nullptr,
 };

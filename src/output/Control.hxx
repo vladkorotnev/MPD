@@ -202,6 +202,8 @@ class AudioOutputControl {
 	 */
 	bool skip_delay;
 
+	uint64_t start_time;
+
 public:
 	Mutex &mutex;
 
@@ -372,6 +374,17 @@ public:
 	bool LockUpdate(const AudioFormat audio_format,
 			const MusicPipe &mp,
 			bool force) noexcept;
+	
+	/**
+	 * returns the device's preferred shared mode
+	 * output format if open
+	 */
+	AudioFormat DeviceFormat();
+	
+	/**
+	 * returns the device's latency
+	 */
+	double Latency();
 
 	/**
 	 * Did we already consumed this chunk?

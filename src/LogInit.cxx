@@ -94,6 +94,8 @@ parse_log_level(const char *value, int line)
 		return LogLevel::DEFAULT;
 	if (0 == strcmp(value, "secure"))
 		return LOG_LEVEL_SECURE;
+	if (0 == strcmp(value, "info"))
+		return LogLevel::INFO;
 	else if (0 == strcmp(value, "verbose"))
 		return LogLevel::DEBUG;
 	else

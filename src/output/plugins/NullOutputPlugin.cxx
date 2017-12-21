@@ -96,4 +96,6 @@ const struct AudioOutputPlugin null_output_plugin = {
 	&Wrapper::Cancel,
 	nullptr,
 	nullptr,
+	nullptr,
+	nullptr,
 };

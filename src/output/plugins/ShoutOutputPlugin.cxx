@@ -462,4 +462,5 @@ const struct AudioOutputPlugin shout_output_plugin = {
 	&Wrapper::Cancel,
 	&Wrapper::Pause,
 	nullptr,
+	nullptr,
 };

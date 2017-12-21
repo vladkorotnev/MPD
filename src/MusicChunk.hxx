@@ -30,6 +30,7 @@
 
 #include <stdint.h>
 #include <stddef.h>
+#include <vector>
 
 static constexpr size_t CHUNK_SIZE = 4096;
 
@@ -85,7 +86,13 @@ struct MusicChunk {
 	 * that there is no replay gain info available.
 	 */
 	unsigned replay_gain_serial = 0;
-
+	
+	/**
+	 * An array of dB values representing the FFT spectrum
+	 * for this chunk
+	 */
+	std::vector<float> bins;
+	
 	/** the data (probably PCM) */
 	uint8_t data[CHUNK_SIZE];
 

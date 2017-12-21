@@ -480,6 +480,6 @@ const struct AudioOutputPlugin haiku_output_plugin = {
 	nullptr,
 	nullptr,
 	nullptr,
-
+	nullptr,
 	&haiku_mixer_plugin,
 };

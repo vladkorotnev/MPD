@@ -124,6 +124,31 @@ handle_addid(Client &client, Request args, Response &r)
 	return CommandResult::OK;
 }
 
+CommandResult
+handle_addid_with_loudness(Client &client, Request args, Response &r)
+{
+  const char *const uri = args.front();
+  auto &partition = client.GetPartition();
+
+  // Replaygain.
+  ReplayGainInfo replayGainInfo;
+  replayGainInfo.track.gain = args.ParseFloat(1);
+  replayGainInfo.album.gain = args.ParseFloat(2);
+  replayGainInfo.track.peak = args.ParseFloat(3);
+  replayGainInfo.album.peak = args.ParseFloat(4);
+
+  // Mixramp.
+  MixRampInfo mixRampInfo;
+  mixRampInfo.SetStart(args[5]);
+  mixRampInfo.SetEnd(args[6]);
+
+  const SongLoader loader(client, &replayGainInfo, &mixRampInfo);
+  unsigned added_id = partition.AppendURI(loader, uri);
+
+  r.Format("Id: %u\n", added_id);
+  return CommandResult::OK;
+}
+
 /**
  * Parse a string in the form "START:END", both being (optional)
  * fractional non-negative time offsets in seconds.  Returns both in

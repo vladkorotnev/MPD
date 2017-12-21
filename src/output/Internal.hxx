@@ -29,6 +29,7 @@ class MusicPipe;
 class EventLoop;
 class Mixer;
 class MixerListener;
+class UDPServer;
 struct MusicChunk;
 struct ConfigBlock;
 struct AudioOutputPlugin;
@@ -110,6 +111,11 @@ struct AudioOutput {
 	 * This mutex protects #open, #fail_timer, #pipe.
 	 */
 	mutable Mutex mutex;
+    
+    /*
+     * If configured, UDP server for visualisation data output.
+     */
+    UDPServer *udp_server;
 
 	/**
 	 * Throws #std::runtime_error on error.
@@ -153,6 +159,16 @@ public:
 	 * Caller must not lock the mutex.
 	 */
 	void OpenOutputAndConvert(AudioFormat audio_format);
+
+	/**
+	 * return's the device's shared output format
+	 */
+	AudioFormat DeviceFormat();
+	
+	/**
+	 * return's the device's combined latency
+	 */
+	double Latency();
 
 	/**
 	 * Close the output plugin.

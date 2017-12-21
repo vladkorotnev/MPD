@@ -35,5 +35,6 @@ extern const MixerPlugin oss_mixer_plugin;
 extern const MixerPlugin roar_mixer_plugin;
 extern const MixerPlugin pulse_mixer_plugin;
 extern const MixerPlugin winmm_mixer_plugin;
+extern const MixerPlugin soundio_mixer_plugin;
 
 #endif

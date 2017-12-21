@@ -38,6 +38,7 @@
 #include "config/Block.hxx"
 #include "util/RuntimeError.hxx"
 #include "Log.hxx"
+#include "UDPServer.hxx"
 
 #include <stdexcept>
 
@@ -48,6 +49,7 @@
 #define AUDIO_OUTPUT_NAME	"name"
 #define AUDIO_OUTPUT_FORMAT	"format"
 #define AUDIO_FILTERS		"filters"
+#define UDP_BIND_ADDRESS  "udp_bind_address"
 
 AudioOutput::AudioOutput(const AudioOutputPlugin &_plugin,
 			 const ConfigBlock &block)
@@ -275,10 +277,10 @@ audio_output_new(EventLoop &event_loop,
 		p = block.GetBlockValue(AUDIO_OUTPUT_TYPE);
 		if (p == nullptr)
 			throw std::runtime_error("Missing \"type\" configuration");
-
 		plugin = AudioOutputPlugin_get(p);
 		if (plugin == nullptr)
 			throw FormatRuntimeError("No such audio output plugin: %s", p);
+        
 	} else {
 		LogWarning(output_domain,
 			   "No 'AudioOutput' defined in config file");
@@ -300,6 +302,12 @@ audio_output_new(EventLoop &event_loop,
 		ao_plugin_finish(ao);
 		throw;
 	}
-
+    
+    if (!block.IsNull()) {
+        auto server = block.GetBlockValue(UDP_BIND_ADDRESS);
+        if (server != nullptr) {
+            ao->udp_server = new UDPServer(block);
+        }
+    }
 	return ao;
 }

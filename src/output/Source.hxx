@@ -28,11 +28,13 @@
 #include "pcm/PcmBuffer.hxx"
 #include "pcm/PcmDither.hxx"
 #include "util/ConstBuffer.hxx"
+#include "MusicChunk.hxx"
 
 #include <utility>
 
 #include <assert.h>
 #include <stdint.h>
+#include <vector>
 
 struct MusicChunk;
 struct Tag;
@@ -170,10 +172,46 @@ public:
 	 * return value as "consumed".
 	 *
 	 * Be sure to call Fill() successfully before calling this
-	 * metohd.
+	 * method.
 	 */
 	ConstBuffer<void> PeekData() const noexcept {
 		return pending_data.ToVoid();
+	}
+	
+	/**
+	 * Returns the current chunk's frequency bins.
+	 */
+	std::vector<float>& PeekBins() noexcept {
+		return ((MusicChunk* )current_chunk)->bins;
+	}
+	
+    /**
+     * Returns the other chunk's frequency bins.
+     */
+    std::vector<float> PeekOtherBins() noexcept {
+		MusicChunk *chunk = current_chunk->other;
+		
+		while (chunk != nullptr && chunk->bins.size() == 0) {
+			chunk = chunk->next;
+		}
+		if (chunk == nullptr) {
+			return std::vector<float>();
+		}
+		return chunk->bins;
+    }
+	
+	/*
+	 * Returns true if crossfading is active
+	 */
+	bool isCrossFading() noexcept {
+		return current_chunk->other != nullptr;
+	}
+	
+	/**
+	 * Returns the current chunk's timestamp.
+	 */
+	float PeekTime() const noexcept {
+		return current_chunk->time.ToMS() / 1000.0f;
 	}
 
 	/**

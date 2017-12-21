@@ -19,6 +19,7 @@
 
 #include "config.h"
 #include "MultipleOutputs.hxx"
+#include "CheckAudioFormat.hxx"
 #include "Internal.hxx"
 #include "Domain.hxx"
 #include "MusicBuffer.hxx"
@@ -278,6 +279,27 @@ MultipleOutputs::Open(const AudioFormat audio_format,
 		else
 			throw std::runtime_error("Failed to open audio output");
 	}
+}
+
+AudioFormat
+MultipleOutputs::DeviceFormat() {
+	AudioFormat device_format = AudioFormat::Undefined();
+	for (auto *ao : outputs) {
+		device_format = ao->DeviceFormat();
+		if (device_format.IsDefined()) {
+			return device_format;
+		}
+	}
+	return device_format;
+}
+
+double
+MultipleOutputs::Latency() {
+	double latency = 0.0;
+	for (auto *ao : outputs) {
+		latency = std::max(latency, ao->Latency());
+	}
+	return latency;
 }
 
 bool

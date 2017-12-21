@@ -217,4 +217,5 @@ const struct AudioOutputPlugin ao_output_plugin = {
 	nullptr,
 	nullptr,
 	nullptr,
+	nullptr,
 };

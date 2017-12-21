@@ -33,6 +33,7 @@
 #include "tag/Tag.hxx"
 #include "Idle.hxx"
 #include "util/Domain.hxx"
+#include "util/StringBuffer.hxx"
 #include "thread/Name.hxx"
 #include "Log.hxx"
 
@@ -356,10 +357,14 @@ Player::StartDecoder(MusicPipe &_pipe)
 	}
 
 	SongTime start_time = pc.next_song->GetStartTime() + pc.seek_time;
-
+	
+	AudioFormat device_format = pc.outputs.DeviceFormat();
+	
+	FormatInfo(player_domain, "Got device format: %s", ToString(device_format).c_str());
+	
 	dc.Start(new DetachedSong(*pc.next_song),
 		 start_time, pc.next_song->GetEndTime(),
-		 buffer, _pipe);
+		 buffer, _pipe, device_format);
 }
 
 void

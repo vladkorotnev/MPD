@@ -27,8 +27,8 @@
 struct ReplayGainConfig;
 
 struct ReplayGainTuple {
-	float gain;
-	float peak;
+	float gain = -200;
+	float peak = 0.0;
 
 	void Clear() {
 		gain = -200;

@@ -92,8 +92,15 @@ host_is_android=no
 host_is_darwin=no
 host_is_solaris=no
 host_is_windows=no
+host_is_arm=no
 
 linux_auto=no
+
+case "$host_os" in
+linux-gnueabihf*)
+  host_is_arm=yes
+  ;;
+esac
 
 case "$host_os" in
 linux-android*)
@@ -677,6 +684,12 @@ dnl ---------------------------------------------------------------------------
 dnl Converter Plugins
 dnl ---------------------------------------------------------------------------
 
+dnl ---------------------------------- libfftw---------------------------------
+MPD_ENABLE_AUTO_HEADER([fftw], [FFTW], [fftw3.h],
+	[-lfftw3f], [],
+	[FFTW support],
+	[FFTW not found])
+
 dnl ------------------------------ libsamplerate ------------------------------
 MPD_ENABLE_AUTO_PKG(lsr, LIBSAMPLERATE, [samplerate >= 0.1.3],
 	[libsamplerate resampling], [libsamplerate not found])
@@ -852,8 +865,8 @@ MPD_ENABLE_AUTO_LIB(aac, FAAD, faad, NeAACDecOpen, [-lfaad], [],
 
 dnl ---------------------------------- ffmpeg ---------------------------------
 MPD_ENABLE_AUTO_PKG(ffmpeg, FFMPEG,
-	[libavformat >= 53.17 libavcodec >= 53.25 libavutil >= 51.17],
-	[ffmpeg decoder library], [libavformat+libavcodec+libavutil not found])
+	[libavformat >= 53.17 libavcodec >= 53.25 libavutil >= 51.17 libswresample >= 2.8 ],
+	[ffmpeg decoder library], [libavformat+libavcodec+libavutil+libswresample not found])
 
 dnl ----------------------------------- FLAC ----------------------------------
 
@@ -1109,7 +1122,12 @@ dnl Audio Output Plugins
 dnl ---------------------------------------------------------------------------
 
 dnl ----------------------------------- ALSA ----------------------------------
-MPD_ENABLE_AUTO_PKG(alsa, ALSA, [alsa >= 0.9.0],
+dnl MPD_ENABLE_AUTO_PKG(alsa, ALSA, [alsa >= 0.9.0],
+dnl 	[ALSA output plugin], [libasound not found],
+dnl 	[$linux_auto])
+
+MPD_ENABLE_AUTO_HEADER([alsa], [ALSA], [soundio/soundio.h],
+	[-lasound], [],
 	[ALSA output plugin], [libasound not found],
 	[$linux_auto])
 
@@ -1171,6 +1189,19 @@ fi
 dnl ---------------------------------- libao ----------------------------------
 MPD_ENABLE_AUTO_PKG(ao, AO, [ao],
 	[libao output plugin], [libao not found])
+
+dnl ---------------------------------- libsoundio ----------------------------------
+MPD_ENABLE_AUTO_HEADER([soundio], [SOUNDIO], [soundio/soundio.h],
+	[-lsoundio], [],
+	[libsoundio output plugin],
+	[libsoundio not found])
+
+if test x$host_is_linux = xyes; then
+  LIBS="$LIBS -lgnutls -lnettle -lhogweed -lgmp -lintl -liconv -lasound -ldl"
+  if test x$host_is_arm = xno; then
+    LIBS="$LIBS -lmfx -lva -lva-drm -lpulse"
+  fi
+fi
 
 dnl ---------------------------------- OpenAL ---------------------------------
 AC_SUBST(OPENAL_CFLAGS,"")
@@ -1260,7 +1291,7 @@ dnl --------------------------------- WinMM ---------------------------------
 if test "x$host_is_windows" = xyes; then
 	AC_DEFINE(ENABLE_WINMM_OUTPUT, 1, [Define to enable WinMM support])
 	enable_winmm_output=yes
-	LIBS="$LIBS -lwinmm"
+	LIBS="$LIBS -lwinmm -luuid -lole32 -lmfplat -lgnutls -lnettle -lmfx -liconv -lintl -lhogweed -lgmp -lCrypt32 -lOleAut32 -lWs2_32 -lStrmiids"
 else
 	enable_winmm_output=no
 fi
@@ -1439,6 +1470,7 @@ results(soxr, [libsoxr])
 results(libmpdclient, [libmpdclient])
 results(inotify, [inotify])
 results(sqlite, [SQLite])
+results(fftw, [FFTW])
 
 printf '\nMetadata support:\n\t'
 results(id3,[ID3])
@@ -1453,6 +1485,7 @@ results(httpd_output,[HTTP Daemon])
 results(jack,[JACK])
 printf '\n\t'
 results(ao,[libao])
+results(soundio,[libsoundio])
 results(oss,[OSS])
 results(openal,[OpenAL])
 results(osx, [OS X])

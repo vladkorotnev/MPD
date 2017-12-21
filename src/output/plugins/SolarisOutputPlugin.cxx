@@ -170,4 +170,5 @@ const struct AudioOutputPlugin solaris_output_plugin = {
 	&Wrapper::Cancel,
 	nullptr,
 	nullptr,
+	nullptr,
 };

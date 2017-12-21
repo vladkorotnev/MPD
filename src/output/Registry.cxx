@@ -22,6 +22,7 @@
 #include "OutputPlugin.hxx"
 #include "plugins/AlsaOutputPlugin.hxx"
 #include "plugins/AoOutputPlugin.hxx"
+#include "plugins/SoundIOOutputPlugin.hxx"
 #include "plugins/FifoOutputPlugin.hxx"
 #include "plugins/SndioOutputPlugin.hxx"
 #include "plugins/httpd/HttpdOutputPlugin.hxx"
@@ -38,6 +39,7 @@
 #include "plugins/ShoutOutputPlugin.hxx"
 #include "plugins/sles/SlesOutputPlugin.hxx"
 #include "plugins/SolarisOutputPlugin.hxx"
+#include "plugins/UdpOutputPlugin.hxx"
 #include "plugins/WinmmOutputPlugin.hxx"
 
 #include <string.h>
@@ -53,6 +55,7 @@ const AudioOutputPlugin *const audio_output_plugins[] = {
 #ifdef HAVE_FIFO
 	&fifo_output_plugin,
 #endif
+  &udp_output_plugin,
 #ifdef ENABLE_SNDIO
 	&sndio_output_plugin,
 #endif
@@ -70,6 +73,9 @@ const AudioOutputPlugin *const audio_output_plugins[] = {
 #endif
 #ifdef ENABLE_AO
 	&ao_output_plugin,
+#endif
+#ifdef ENABLE_SOUNDIO
+	&soundio_output_plugin,
 #endif
 #ifdef HAVE_OSS
 	&oss_output_plugin,

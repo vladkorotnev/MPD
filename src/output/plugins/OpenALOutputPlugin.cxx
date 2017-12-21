@@ -244,4 +244,6 @@ const struct AudioOutputPlugin openal_output_plugin = {
 	&Wrapper::Cancel,
 	nullptr,
 	nullptr,
+	nullptr,
+	nullptr,
 };

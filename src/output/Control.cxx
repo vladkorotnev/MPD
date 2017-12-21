@@ -238,6 +238,15 @@ AudioOutputControl::LockUpdate(const AudioFormat audio_format,
 	return false;
 }
 
+AudioFormat AudioOutputControl::DeviceFormat() {
+	return output->DeviceFormat();
+}
+
+double AudioOutputControl::Latency() {
+	return output->Latency();
+}
+
+
 bool
 AudioOutputControl::IsChunkConsumed(const MusicChunk &chunk) const noexcept
 {

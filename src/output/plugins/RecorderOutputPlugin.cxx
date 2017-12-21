@@ -383,4 +383,6 @@ const struct AudioOutputPlugin recorder_output_plugin = {
 	nullptr,
 	nullptr,
 	nullptr,
+	nullptr,
+	nullptr,
 };

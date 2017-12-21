@@ -32,7 +32,7 @@ void
 FfmpegInit()
 {
 	av_log_set_callback(FfmpegLogCallback);
-
+	av_log_set_level(AV_LOG_INFO);
 	av_register_all();
 }
 

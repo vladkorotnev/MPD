@@ -33,6 +33,9 @@ CommandResult
 handle_addid(Client &client, Request request, Response &response);
 
 CommandResult
+handle_addid_with_loudness(Client &client, Request request, Response &response);
+
+CommandResult
 handle_rangeid(Client &client, Request request, Response &response);
 
 CommandResult

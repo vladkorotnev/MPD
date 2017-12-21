@@ -469,7 +469,12 @@ public:
 	void LockStop();
 
 	void LockUpdateAudio();
-
+	
+	/**
+	 * Return highest output device latency.
+	 */
+	double OutputLatency() override;
+	
 private:
 	void EnqueueSongLocked(DetachedSong *song) {
 		assert(song != nullptr);

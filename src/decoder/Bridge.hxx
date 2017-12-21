@@ -29,6 +29,7 @@ class PcmConvert;
 struct MusicChunk;
 struct DecoderControl;
 struct Tag;
+class SpectrumAnalyzer;
 
 /**
  * A bridge between the #DecoderClient interface and the MPD core
@@ -103,7 +104,11 @@ public:
 		      Tag *_tag)
 		:dc(_dc),
 		 initial_seek_pending(_initial_seek_pending),
-		 song_tag(_tag) {}
+		 song_tag(_tag)
+#ifdef ENABLE_FFTW
+        ,analyzer(0)
+#endif
+    {}
 
 	~DecoderBridge();
 
@@ -171,6 +176,9 @@ private:
 	DecoderCommand DoSendTag(const Tag &tag);
 
 	bool UpdateStreamTag(InputStream *is);
+#ifdef ENABLE_FFTW
+	SpectrumAnalyzer *analyzer;
+#endif
 };
 
 #endif

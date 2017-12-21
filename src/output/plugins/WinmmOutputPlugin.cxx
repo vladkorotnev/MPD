@@ -333,5 +333,7 @@ const struct AudioOutputPlugin winmm_output_plugin = {
 	&Wrapper::Drain,
 	&Wrapper::Cancel,
 	nullptr,
+	nullptr,
+	nullptr,
 	&winmm_mixer_plugin,
 };

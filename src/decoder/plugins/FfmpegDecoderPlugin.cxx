@@ -322,7 +322,7 @@ FfmpegReceiveFrames(DecoderClient &client, InputStream &is,
 					      msg);
 			}
 
-			return DecoderCommand::STOP;
+			return DecoderCommand::NONE;
 		}
 	}
 }
@@ -646,13 +646,13 @@ FfmpegDecode(DecoderClient &client, InputStream &input,
 	AVCodecContext *codec_context = av_stream.codec;
 #endif
 
-	const auto &codec_params = GetCodecParameters(av_stream);
+	auto codec_params = GetCodecParameters(av_stream);
 
 #if LIBAVCODEC_VERSION_INT >= AV_VERSION_INT(54, 25, 0)
 	const AVCodecDescriptor *codec_descriptor =
 		avcodec_descriptor_get(codec_params.codec_id);
 	if (codec_descriptor != nullptr)
-		FormatDebug(ffmpeg_domain, "codec '%s'",
+		FormatInfo(ffmpeg_domain, "codec '%s'",
 			    codec_descriptor->name);
 #else
 	if (codec_context->codec_name[0] != 0)
@@ -661,7 +661,6 @@ FfmpegDecode(DecoderClient &client, InputStream &input,
 #endif
 
 	AVCodec *codec = avcodec_find_decoder(codec_params.codec_id);
-
 	if (!codec) {
 		LogError(ffmpeg_domain, "Unsupported audio codec");
 		return;
@@ -712,7 +711,9 @@ FfmpegDecode(DecoderClient &client, InputStream &input,
 #endif
 
 	const SignedSongTime total_time =
-		FromFfmpegTimeChecked(av_stream.duration, av_stream.time_base);
+		av_stream.duration != (int64_t)AV_NOPTS_VALUE
+		? FromFfmpegTimeChecked(av_stream.duration, av_stream.time_base)
+		: FromFfmpegTimeChecked(format_context.duration, AV_TIME_BASE_Q);
 
 	client.Ready(audio_format, input.IsSeekable(), total_time);
 
@@ -842,6 +843,10 @@ FfmpegScanStream(AVFormatContext &format_context,
 		tag_handler_invoke_duration(handler, handler_ctx,
 					    FromFfmpegTime(stream.duration,
 							   stream.time_base));
+	else if (format_context.duration != (int64_t)AV_NOPTS_VALUE)
+		tag_handler_invoke_duration(handler, handler_ctx,
+					    FromFfmpegTime(format_context.duration,
+							   AV_TIME_BASE_Q));
 
 	FfmpegScanMetadata(format_context, audio_stream, handler, handler_ctx);
 

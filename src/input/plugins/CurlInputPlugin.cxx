@@ -18,6 +18,7 @@
  */
 
 #include "config.h"
+
 #include "CurlInputPlugin.hxx"
 #include "lib/curl/Easy.hxx"
 #include "lib/curl/Global.hxx"
@@ -55,7 +56,7 @@
  * reasonable limit that doesn't make low-end machines suffer too
  * much, but doesn't cause stuttering on high-latency lines.
  */
-static const size_t CURL_MAX_BUFFERED = 512 * 1024;
+static const size_t CURL_MAX_BUFFERED = 1024 * 1024;
 
 /**
  * Resume the stream at this number of bytes after it has been paused.
@@ -88,7 +89,7 @@ struct CurlInputStream final : public AsyncInputStream, CurlResponseHandler {
 
 	static InputStream *Open(const char *url, Mutex &mutex, Cond &cond);
 
-	void InitEasy();
+	void InitEasy(offset_type offset = 0);
 
 	/**
 	 * Frees the current "libcurl easy" handle, and everything
@@ -346,7 +347,7 @@ CurlInputStream::~CurlInputStream()
 }
 
 void
-CurlInputStream::InitEasy()
+CurlInputStream::InitEasy(offset_type startOffset)
 {
 	request = new CurlRequest(*curl_global, GetURI(), *this);
 
@@ -376,6 +377,18 @@ CurlInputStream::InitEasy()
 	request_headers.Append("Icy-Metadata: 1");
 	request->SetOption(CURLOPT_HTTPHEADER, request_headers.Get());
 
+	/* send the "Range" header */
+	if (startOffset > 0) {
+#ifdef WIN32
+		// TODO: what can we use on Windows to format 64 bit?
+		sprintf(range, "%lu-", (long)startOffset);
+#else
+		sprintf(range, "%llu-", (unsigned long long)startOffset);
+#endif
+    
+		request->SetOption(CURLOPT_RANGE, range);
+	}
+
 	request->Start();
 }
 
@@ -395,19 +408,7 @@ CurlInputStream::SeekInternal(offset_type new_offset)
 		return;
 	}
 
-	InitEasy();
-
-	/* send the "Range" header */
-
-	if (offset > 0) {
-#ifdef WIN32
-		// TODO: what can we use on Windows to format 64 bit?
-		sprintf(range, "%lu-", (long)offset);
-#else
-		sprintf(range, "%llu-", (unsigned long long)offset);
-#endif
-		request->SetOption(CURLOPT_RANGE, range);
-	}
+	InitEasy(offset);
 }
 
 void

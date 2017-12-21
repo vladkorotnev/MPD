@@ -95,6 +95,16 @@ struct AudioOutputWrapper {
 		T &t = Cast(*ao);
 		return t.Pause();
 	}
+	
+	static AudioFormat DeviceFormat(AudioOutput *ao) {
+		T &t = Cast(*ao);
+		return t.DeviceFormat();
+	}
+	
+	static double Latency(AudioOutput *ao) {
+		T &t = Cast(*ao);
+		return t.Latency();
+	}
 };
 
 #endif

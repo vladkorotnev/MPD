@@ -42,6 +42,8 @@ public:
 	 * can do that safely.
 	 */
 	virtual void ApplyEnabled() = 0;
+	
+	virtual double OutputLatency() = 0;
 };
 
 #endif

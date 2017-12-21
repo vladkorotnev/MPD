@@ -96,6 +96,12 @@ PlayerControl::LockUpdateAudio()
 	LockSynchronousCommand(PlayerCommand::UPDATE_AUDIO);
 }
 
+double
+PlayerControl::OutputLatency() {
+	return outputs.Latency();
+}
+
+
 void
 PlayerControl::Kill()
 {

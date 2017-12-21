@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-import os, os.path
+import os, os.path, platform
 import sys, subprocess
 
 configure_args = sys.argv[1:]
@@ -43,17 +43,17 @@ class CrossGccToolchain:
         self.install_prefix = install_prefix
 
         toolchain_bin = os.path.join(toolchain_path, 'bin')
-        self.cc = os.path.join(toolchain_bin, arch + '-gcc')
-        self.cxx = os.path.join(toolchain_bin, arch + '-g++')
-        self.ar = os.path.join(toolchain_bin, arch + '-ar')
-        self.ranlib = os.path.join(toolchain_bin, arch + '-ranlib')
-        self.nm = os.path.join(toolchain_bin, arch + '-nm')
-        self.strip = os.path.join(toolchain_bin, arch + '-strip')
+        self.cc = 'gcc'
+        self.cxx = 'g++'
+        self.ar = 'ar'
+        self.ranlib = 'ranlib'
+        self.nm = 'nm'
+        self.strip = 'strip'
 
         common_flags = ''
         self.cflags = '-O2 -g ' + common_flags
         self.cxxflags = '-O2 -g ' + common_flags
-        self.cppflags = '-isystem ' + os.path.join(install_prefix, 'include')
+        self.cppflags = '-I' + os.path.join(install_prefix, 'include')
         self.ldflags = '-L' + os.path.join(install_prefix, 'lib')
         self.libs = ''
 
@@ -70,20 +70,21 @@ class CrossGccToolchain:
 # a list of third-party libraries to be used by MPD on Android
 from build.libs import *
 thirdparty_libs = [
-    libogg,
-    libvorbis,
-    opus,
-    flac,
+    libsamplerate,
     zlib,
     libid3tag,
-    liblame,
-    ffmpeg,
-    curl,
     boost,
+#   ffmpeg,
+    curl,
+    libsoundio
 ]
 
+# Add FFTW on non-arm platforms.
+if platform.machine().find('arm') == -1:
+  thirdparty_libs.append(fftw)
+
 # build the third-party libraries
-toolchain = CrossGccToolchain('/usr', host_arch,
+toolchain = CrossGccToolchain('/usr', '',
                               tarball_path, src_path, build_path, root_path)
 
 for x in thirdparty_libs:
@@ -91,26 +92,46 @@ for x in thirdparty_libs:
         x.build(toolchain)
 
 # configure and build MPD
+extra_libs = ' -framework AudioToolbox -framework VideoToolbox -framework CoreVideo -framework CoreMedia -framework Security' if sys.platform == 'darwin' else ''
 
 configure = [
     os.path.join(mpd_path, 'configure'),
     'CC=' + toolchain.cc,
     'CXX=' + toolchain.cxx,
     'CFLAGS=' + toolchain.cflags,
-    'CXXFLAGS=' + toolchain.cxxflags,
+    'CXXFLAGS=' + toolchain.cxxflags + ' -DCURL_STATICLIB=1 -DSOUNDIO_STATIC_LIBRARY=1',
     'CPPFLAGS=' + toolchain.cppflags,
-    'LDFLAGS=' + toolchain.ldflags + ' -static',
+    'LDFLAGS=' + toolchain.ldflags + extra_libs + (' -static' if sys.platform == 'msys' else ''),
     'LIBS=' + toolchain.libs,
     'AR=' + toolchain.ar,
     'RANLIB=' + toolchain.ranlib,
     'STRIP=' + toolchain.strip,
     '--host=' + toolchain.arch,
     '--prefix=' + toolchain.install_prefix,
-
     '--enable-silent-rules',
-
+	'--disable-sqlite',
+	'--disable-flac',
+	'--enable-ffmpeg',
+	'--disable-bzip2',
+	'--with-zeroconf=no',
+	'--disable-sndfile',
+    '--disable-fifo',
+    '--disable-dsd',
+    '--disable-httpd-output',
+    '--disable-recorder-output',
+    '--enable-alsa' if sys.platform == 'linux2' else '',
+	'--disable-lame-encoder',
+	'--disable-libmpdclient',
+	'--disable-fluidsynth',
+	'--disable-audiofile',
+    '--disable-oss',
+    '--enable-pulse' if sys.platform == 'linux2' else '',
+	'--disable-vorbis-encoder',
+	'--enable-curl',
+    '--disable-aac',
+    '--disable-database',
     '--disable-icu',
-
+    '--enable-osx' if sys.platform == "darwin" else '',
 ] + configure_args
 
 from build.cmdline import concatenate_cmdline_variables

@@ -23,6 +23,9 @@
 #include "DecoderError.hxx"
 #include "DecoderControl.hxx"
 #include "DetachedSong.hxx"
+#ifdef ENABLE_FFTW
+#include "SpectrumAnalyzer.hxx"
+#endif
 #include "pcm/PcmConvert.hxx"
 #include "MusicPipe.hxx"
 #include "MusicBuffer.hxx"
@@ -47,7 +50,9 @@ DecoderBridge::~DecoderBridge()
 		convert->Close();
 		delete convert;
 	}
-
+#ifdef ENABLE_FFTW
+	delete analyzer;
+#endif
 	delete song_tag;
 	delete stream_tag;
 	delete decoder_tag;
@@ -128,8 +133,19 @@ DecoderBridge::FlushChunk()
 	auto *chunk = std::exchange(current_chunk, nullptr);
 	if (chunk->IsEmpty())
 		dc.buffer->Return(chunk);
-	else
+	else {
+#ifdef ENABLE_FFTW
+		// perform fft
+		if (analyzer != nullptr) {
+			float gain = 0;
+			if (dc.replay_gain_mode != ReplayGainMode::OFF) {
+				gain = dc.replay_gain_db;
+			}
+			analyzer->Analyze(chunk, gain);
+		}
+#endif
 		dc.pipe->Push(chunk);
+	}
 
 	const std::lock_guard<Mutex> protect(dc.mutex);
 	if (dc.client_is_waiting)
@@ -248,11 +264,14 @@ DecoderBridge::Ready(const AudioFormat audio_format,
 		     bool seekable, SignedSongTime duration)
 {
 	assert(convert == nullptr);
+#ifdef ENABLE_FFTW
+	assert(analyzer == nullptr);
+#endif
 	assert(stream_tag == nullptr);
 	assert(decoder_tag == nullptr);
 	assert(!seeking);
 
-	FormatDebug(decoder_domain, "audio_format=%s, seekable=%s",
+	FormatInfo(decoder_domain, "audio_format=%s, seekable=%s",
 		    ToString(audio_format).c_str(),
 		    seekable ? "true" : "false");
 
@@ -262,7 +281,7 @@ DecoderBridge::Ready(const AudioFormat audio_format,
 	}
 
 	if (dc.in_audio_format != dc.out_audio_format) {
-		FormatDebug(decoder_domain, "converting to %s",
+		FormatInfo(decoder_domain, "converting to %s",
 			    ToString(dc.out_audio_format).c_str());
 
 		convert = new PcmConvert();
@@ -274,6 +293,13 @@ DecoderBridge::Ready(const AudioFormat audio_format,
 			error = std::current_exception();
 		}
 	}
+#ifdef ENABLE_FFTW
+	if (dc.out_audio_format.format == SampleFormat::FLOAT) {
+		// create SpectrumAnalyzer
+		FormatInfo(decoder_domain, "Enabling spectrum analyzer, format: %s", ToString(dc.out_audio_format).c_str());
+		analyzer = new SpectrumAnalyzer(dc.out_audio_format);
+	}
+#endif
 }
 
 DecoderCommand
@@ -317,7 +343,10 @@ DecoderBridge::CommandFinished()
 
 		if (convert != nullptr)
 			convert->Reset();
-
+#ifdef ENABLE_FFTW
+		if (analyzer != nullptr)
+			analyzer->Reset();
+#endif
 		timestamp = dc.seek_time.ToDoubleS();
 	}
 
@@ -576,6 +605,10 @@ DecoderBridge::SubmitTag(InputStream *is, Tag &&tag)
 void
 DecoderBridge::SubmitReplayGain(const ReplayGainInfo *new_replay_gain_info)
 {
+	// Don't override with what we get in the decoder if we already have info.
+	if (replay_gain_info.IsDefined())
+		return;
+
 	if (new_replay_gain_info != nullptr) {
 		static unsigned serial;
 		if (++serial == 0)
@@ -608,5 +641,9 @@ DecoderBridge::SubmitReplayGain(const ReplayGainInfo *new_replay_gain_info)
 void
 DecoderBridge::SubmitMixRamp(MixRampInfo &&mix_ramp)
 {
+	// Don't override with what we get in the decoder if we already have info.
+	if (dc.mix_ramp.IsDefined())
+		return;
+
 	dc.SetMixRamp(std::move(mix_ramp));
 }

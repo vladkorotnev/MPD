@@ -83,6 +83,7 @@ handle_not_commands(Client &client, Request request, Response &response);
 static constexpr struct command commands[] = {
 	{ "add", PERMISSION_ADD, 1, 1, handle_add },
 	{ "addid", PERMISSION_ADD, 1, 2, handle_addid },
+	{ "addidwithloudness", PERMISSION_ADD, 7, 7, handle_addid_with_loudness },
 	{ "addtagid", PERMISSION_ADD, 3, 3, handle_addtagid },
 	{ "channels", PERMISSION_READ, 0, 0, handle_channels },
 	{ "clear", PERMISSION_CONTROL, 0, 0, handle_clear },

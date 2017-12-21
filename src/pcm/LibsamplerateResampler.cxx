@@ -98,7 +98,7 @@ LibsampleratePcmResampler::Open(AudioFormat &af, unsigned new_sample_rate)
 	memset(&data, 0, sizeof(data));
 
 	data.src_ratio = double(new_sample_rate) / double(af.sample_rate);
-	FormatDebug(libsamplerate_domain,
+	FormatInfo(libsamplerate_domain,
 		    "setting samplerate conversion ratio to %.2lf",
 		    data.src_ratio);
 	src_set_ratio(state, data.src_ratio);

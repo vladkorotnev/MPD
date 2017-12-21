@@ -101,4 +101,5 @@ const struct AudioOutputPlugin pipe_output_plugin = {
 	nullptr,
 	nullptr,
 	nullptr,
+	nullptr,
 };

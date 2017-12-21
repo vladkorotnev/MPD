@@ -148,8 +148,11 @@ ReplayGainFilter::Update()
 	if (mode != ReplayGainMode::OFF) {
 		const auto &tuple = info.Get(mode);
 		float scale = tuple.CalculateScale(config);
-		FormatDebug(replay_gain_domain,
-			    "scale=%f\n", (double)scale);
+
+		if (info.IsDefined()) {
+			FormatInfo(replay_gain_domain,
+								 "scale=%f\n", (double)scale);
+		}
 
 		volume = pcm_float_to_volume(scale);
 	}

@@ -25,6 +25,9 @@
 #include "Chrono.hxx"
 #include "Compiler.h"
 
+#include "MixRampInfo.hxx"
+#include "ReplayGainInfo.hxx"
+
 #include <string>
 #include <utility>
 
@@ -62,6 +65,12 @@ class DetachedSong {
 	std::string real_uri;
 
 	Tag tag;
+
+	/**
+	 * The song might come with its own data.
+	 */
+	ReplayGainInfo replay_gain;
+	MixRampInfo mixramp;
 
 	time_t mtime = 0;
 
@@ -239,6 +248,19 @@ public:
 	 * Load #tag and #mtime from a local file.
 	 */
 	bool LoadFile(Path path);
+
+  /**
+   * ReplayGain
+   */
+  const ReplayGainInfo& GetReplayGain() const { return replay_gain; }
+  void SetReplayGain(const ReplayGainInfo& _replay_gain) { replay_gain = _replay_gain; }
+
+  /**
+   * MixRamp
+   */
+  MixRampInfo GetMixRamp() const { return mixramp; }
+  void SetMixRamp(const MixRampInfo& _mix_ramp) { mixramp = _mix_ramp; }
+
 };
 
 #endif

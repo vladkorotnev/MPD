@@ -7,5 +7,9 @@ def untar(tarball_path, parent_path, base):
     except FileNotFoundError:
         pass
     os.makedirs(parent_path, exist_ok=True)
-    subprocess.check_call(['/bin/tar', 'xfC', tarball_path, parent_path])
+    bin = '/bin/tar'
+    if not os.path.isfile(bin):
+        bin = '/usr/bin/tar'
+    
+    subprocess.check_call([bin, 'xfC', tarball_path, parent_path])
     return path

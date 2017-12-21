@@ -892,6 +892,6 @@ const struct AudioOutputPlugin pulse_output_plugin = {
 	nullptr,
 	&Wrapper::Cancel,
 	&Wrapper::Pause,
-
+	nullptr,
 	&pulse_mixer_plugin,
 };

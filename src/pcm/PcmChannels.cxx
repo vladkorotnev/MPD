@@ -130,25 +130,40 @@ StereoToN(typename Traits::pointer_type dest,
 template<SampleFormat F, class Traits=SampleTraits<F>>
 static typename Traits::pointer_type
 NToM(typename Traits::pointer_type dest,
-     unsigned dest_channels,
-     unsigned src_channels,
-     typename Traits::const_pointer_type src,
-     typename Traits::const_pointer_type end)
+	 unsigned dest_channels,
+	 unsigned src_channels,
+	 typename Traits::const_pointer_type src,
+	 typename Traits::const_pointer_type end)
 {
 	assert((end - src) % src_channels == 0);
-
-	while (src != end) {
-		typename Traits::sum_type sum = *src++;
-		for (unsigned c = 1; c < src_channels; ++c)
-			sum += *src++;
-
-		typename Traits::value_type value(sum / int(src_channels));
-
-		/* TODO: this is actually only mono ... */
-		for (unsigned c = 0; c < dest_channels; ++c)
-			*dest++ = value;
+	
+	if (dest_channels == 6 && src_channels == 5) {
+		std::array<typename Traits::value_type, 1> silence;
+		PcmSilence({&silence.front(), sizeof(silence)}, F);
+		
+		// handle 5.0 (FL FR C SL SR to 5.1 by muting LFE)
+		while (src != end) {
+			*dest++ = *src++; // FL
+			*dest++ = *src++; // FR
+			*dest++ = *src++; // C
+			//dest = std::copy_n(silence.begin(), sizeof(silence), dest); // LFE mute
+			*dest++ = 0;
+			*dest++ = *src++; // SL
+			*dest++ = *src++; // SR
+		}
+	} else {
+		while (src != end) {
+			typename Traits::sum_type sum = *src++;
+			for (unsigned c = 1; c < src_channels; ++c)
+				sum += *src++;
+			
+			typename Traits::value_type value(sum / int(src_channels));
+			
+			/* TODO: this is actually only mono ... */
+			for (unsigned c = 0; c < dest_channels; ++c)
+				*dest++ = value;
+		}
 	}
-
 	return dest;
 }
 

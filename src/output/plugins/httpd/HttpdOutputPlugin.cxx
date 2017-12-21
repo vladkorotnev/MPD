@@ -488,4 +488,6 @@ const struct AudioOutputPlugin httpd_output_plugin = {
 	&Wrapper::Cancel,
 	&Wrapper::Pause,
 	nullptr,
+	nullptr,
+	nullptr,
 };

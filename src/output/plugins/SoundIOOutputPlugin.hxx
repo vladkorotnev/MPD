@@ -17,39 +17,17 @@
  * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
  */
 
-#include "FormatString.hxx"
-#include "AllocatedString.hxx"
+#ifndef MPD_SOUNDIO_OUTPUT_PLUGIN_HXX
+#define MPD_SOUNDIO_OUTPUT_PLUGIN_HXX
 
-#include <stdio.h>
-#include <stdlib.h>
+class SoundIOOutput;
 
-#ifdef WIN32
-#include <string.h>
+extern const struct AudioOutputPlugin soundio_output_plugin;
+
+int
+soundio_output_get_volume(SoundIOOutput &soundio);
+
+void
+soundio_output_set_volume(SoundIOOutput &soundio, unsigned volume);
+
 #endif
-
-AllocatedString<>
-FormatStringV(const char *fmt, va_list args) noexcept
-{
-	va_list tmp;
-	va_copy(tmp, args);
-	const int length = vsnprintf(NULL, 0, fmt, tmp);
-	va_end(tmp);
-
-	if (length <= 0)
-		/* wtf.. */
-		abort();
-
-	char *buffer = new char[length + 1];
-	vsnprintf(buffer, length + 1, fmt, args);
-	return AllocatedString<>::Donate(buffer);
-}
-
-AllocatedString<>
-FormatString(const char *fmt, ...) noexcept
-{
-	va_list args;
-	va_start(args, fmt);
-	auto p = FormatStringV(fmt, args);
-	va_end(args);
-	return p;
-}

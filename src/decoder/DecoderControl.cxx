@@ -22,6 +22,9 @@
 #include "DecoderError.hxx"
 #include "MusicPipe.hxx"
 #include "DetachedSong.hxx"
+#include "util/StringBuffer.hxx"
+#include "Log.hxx"
+
 
 #include <stdexcept>
 
@@ -65,7 +68,12 @@ DecoderControl::SetReady(const AudioFormat audio_format,
 	assert(audio_format.IsValid());
 
 	in_audio_format = audio_format;
-	out_audio_format = audio_format.WithMask(configured_audio_format);
+	if (device_format.IsDefined()) {
+		FormatInfo(decoder_domain, "Shared device format set to %s, will convert if required", ToString(device_format).c_str());
+		out_audio_format = device_format;
+	} else {
+		out_audio_format = audio_format.WithMask(configured_audio_format);
+	}
 
 	seekable = _seekable;
 	total_time = _duration;
@@ -94,7 +102,7 @@ DecoderControl::IsCurrentSong(const DetachedSong &_song) const noexcept
 void
 DecoderControl::Start(DetachedSong *_song,
 		      SongTime _start_time, SongTime _end_time,
-		      MusicBuffer &_buffer, MusicPipe &_pipe)
+					  MusicBuffer &_buffer, MusicPipe &_pipe, AudioFormat _device_format)
 {
 	const std::lock_guard<Mutex> protect(mutex);
 
@@ -107,6 +115,7 @@ DecoderControl::Start(DetachedSong *_song,
 	end_time = _end_time;
 	buffer = &_buffer;
 	pipe = &_pipe;
+	device_format = _device_format;
 
 	ClearError();
 	SynchronousCommandLocked(DecoderCommand::START);

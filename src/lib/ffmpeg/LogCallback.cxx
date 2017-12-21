@@ -62,5 +62,8 @@ FfmpegLogCallback(gcc_unused void *ptr, int level, const char *fmt, va_list vl)
 			 ffmpeg_domain.GetName(), cls->item_name(ptr));
 		const Domain d(domain);
 		LogFormatV(d, FfmpegImportLogLevel(level), fmt, vl);
+	} else {
+		const Domain d("ffmpeg");
+		LogFormatV(d, FfmpegImportLogLevel(level), fmt, vl);
 	}
 }

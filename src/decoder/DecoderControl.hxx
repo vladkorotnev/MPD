@@ -114,6 +114,11 @@ struct DecoderControl {
 	bool seek_error;
 	bool seekable;
 	SongTime seek_time;
+	
+	/**
+	 * Current preferred device output format, if any.
+	 */
+	AudioFormat device_format;
 
 	/**
 	 * The "audio_output_format" setting.
@@ -381,9 +386,10 @@ public:
 	 * @param end_time see #DecoderControl
 	 * @param pipe the pipe which receives the decoded chunks (owned by
 	 * the caller)
+	 * @param device_format Output device's preferred format if set
 	 */
 	void Start(DetachedSong *song, SongTime start_time, SongTime end_time,
-		   MusicBuffer &buffer, MusicPipe &pipe);
+		   MusicBuffer &buffer, MusicPipe &pipe, AudioFormat _device_format);
 
 	void Stop();
 

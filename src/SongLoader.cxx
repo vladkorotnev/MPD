@@ -74,7 +74,21 @@ SongLoader::LoadSong(const LocatedUri &located_uri) const
 {
 	switch (located_uri.type) {
 	case LocatedUri::Type::ABSOLUTE:
-		return DetachedSong(located_uri.canonical_uri);
+	{
+		/*** PLEX ***/
+
+		DetachedSong song(located_uri.canonical_uri);
+
+		if (replayGainInfo)
+			song.SetReplayGain(*replayGainInfo);
+
+		if (mixRampInfo)
+			song.SetMixRamp(*mixRampInfo);
+
+		/*** PLEX ***/
+
+		return song;
+	}
 
 	case LocatedUri::Type::RELATIVE:
 		return LoadFromDatabase(located_uri.canonical_uri);

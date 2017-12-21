@@ -452,6 +452,20 @@ decoder_run_song(DecoderControl &dc,
 	dc.state = DecoderState::START;
 	dc.CommandFinishedLocked();
 
+	/**** PLEX ****/
+
+	if (song.GetReplayGain().IsDefined()) {
+    FormatInfo(decoder_thread_domain, "setting replaygain track=%f album=%f", song.GetReplayGain().track.gain, song.GetReplayGain().album.gain);
+    bridge.SubmitReplayGain(&song.GetReplayGain());
+  }
+
+	if (song.GetMixRamp().IsDefined()) {
+    FormatInfo(decoder_thread_domain, "setting mixramp in=%s out=%s", song.GetMixRamp().GetStart(), song.GetMixRamp().GetEnd());
+    bridge.SubmitMixRamp(song.GetMixRamp());
+  }
+
+	/**** PLEX ****/
+
 	bool success;
 	{
 		const ScopeUnlock unlock(dc.mutex);

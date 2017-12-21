@@ -103,3 +103,21 @@ ao_plugin_pause(AudioOutput &ao)
 {
 	return ao.plugin.pause != nullptr && ao.plugin.pause(&ao);
 }
+
+AudioFormat
+ao_plugin_device_format(AudioOutput &ao)
+{
+	if (ao.plugin.device_format != nullptr) {
+		return ao.plugin.device_format(&ao);
+	}
+	return AudioFormat::Undefined();
+}
+
+double
+ao_plugin_latency(AudioOutput &ao)
+{
+	if (ao.plugin.latency != nullptr) {
+		return ao.plugin.latency(&ao);
+	}
+	return 0;
+}

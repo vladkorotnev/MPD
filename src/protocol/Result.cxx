@@ -49,6 +49,10 @@ command_error_v(Client &client, enum ack error,
 void
 command_error(Client &client, enum ack error, const char *fmt, ...)
 {
+	/* if the client is going to be closed, do nothing */
+	if (client.IsExpired())
+		return;
+
 	va_list args;
 	va_start(args, fmt);
 	command_error_v(client, error, fmt, args);

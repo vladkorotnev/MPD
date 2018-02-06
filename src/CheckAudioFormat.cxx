@@ -53,6 +53,20 @@ audio_check_sample_format(SampleFormat sample_format, Error &error)
 }
 
 bool
+audio_check_sample_rate_and_format(unsigned long sample_rate,
+	SampleFormat sample_format, Error &error)
+{
+	if (!audio_valid_sample_rate_and_format(sample_rate, sample_format)) {
+		error.Format(audio_format_domain,
+			     "Invalid sample rate: %lu or format:%u", sample_rate, sample_format);
+		return false;
+	}
+
+	return true;
+}
+
+
+bool
 audio_check_channel_count(unsigned channels, Error &error)
 {
 	if (!audio_valid_channel_count(channels)) {
@@ -69,8 +83,22 @@ audio_format_init_checked(AudioFormat &af, unsigned long sample_rate,
 			  SampleFormat sample_format, unsigned channels,
 			  Error &error)
 {
-	if (audio_check_sample_rate(sample_rate, error) &&
-	    audio_check_sample_format(sample_format, error) &&
+	if (audio_check_sample_rate_and_format(sample_rate, sample_format, error) &&
+	    audio_check_channel_count(channels, error)) {
+		af = AudioFormat(sample_rate, sample_format, channels);
+		assert(af.IsValid());
+		return true;
+	} else
+		return false;
+}
+
+bool
+audio_format_init_checked_full(AudioFormat &af, unsigned long sample_rate,
+			  SampleFormat sample_format, unsigned channels,
+			  Error &error)
+{
+	if (audio_valid_sample_rate(sample_rate) &&
+		audio_check_sample_format(sample_format, error) &&
 	    audio_check_channel_count(channels, error)) {
 		af = AudioFormat(sample_rate, sample_format, channels);
 		assert(af.IsValid());

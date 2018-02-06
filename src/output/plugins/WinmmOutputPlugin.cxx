@@ -178,6 +178,7 @@ winmm_output_open(AudioOutput *ao, AudioFormat &audio_format,
 	case SampleFormat::S24_P32:
 	case SampleFormat::S32:
 	case SampleFormat::FLOAT:
+	case SampleFormat::DOUBLE:
 	case SampleFormat::DSD:
 	case SampleFormat::UNDEFINED:
 		/* we havn't tested formats other than S16 */

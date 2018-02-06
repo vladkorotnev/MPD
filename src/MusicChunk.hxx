@@ -24,7 +24,7 @@
 #include "ReplayGainInfo.hxx"
 #include "util/WritableBuffer.hxx"
 
-#ifndef NDEBUG
+#if 1//ndef NDEBUG
 #include "AudioFormat.hxx"
 #endif
 
@@ -65,6 +65,10 @@ struct MusicChunk {
 	/** the time stamp within the song */
 	SignedSongTime time;
 
+	bool pop_mute;
+
+	bool pop_unmute;
+
 	/**
 	 * An optional tag associated with this chunk (and the
 	 * following chunks); appears at song boundaries.  The tag
@@ -89,7 +93,7 @@ struct MusicChunk {
 	/** the data (probably PCM) */
 	uint8_t data[CHUNK_SIZE];
 
-#ifndef NDEBUG
+#if 1//ndef NDEBUG
 	AudioFormat audio_format;
 #endif
 

@@ -22,9 +22,10 @@
 #include "Interface.hxx"
 #include "LightSong.hxx"
 #include "tag/Tag.hxx"
+#include "db/Selection.hxx"
 
 #include <set>
-
+#include <assert.h>
 #include <string.h>
 
 struct StringLess {
@@ -78,6 +79,24 @@ StatsVisitSong(DatabaseStats &stats, StringSet &artists, StringSet &albums,
 	return true;
 }
 
+static bool
+StatsVisitUniqueSong(DatabaseStats &stats, StringSet &artists, StringSet &albums,
+	       StringSet &songs, const LightSong &song)
+{
+	assert(song.real_uri != nullptr);
+
+#if CLANG_OR_GCC_VERSION(4,8)
+	songs.emplace(song.real_uri);
+#else
+	songs.insert(song.real_uri);
+#endif
+	++stats.song_count;
+
+	StatsVisitTag(stats, artists, albums, *song.tag);
+
+	return true;
+}
+
 bool
 GetStats(const Database &db, const DatabaseSelection &selection,
 	 DatabaseStats &stats, Error &error)
@@ -86,12 +105,21 @@ GetStats(const Database &db, const DatabaseSelection &selection,
 
 	StringSet artists, albums;
 	using namespace std::placeholders;
-	const auto f = std::bind(StatsVisitSong,
-				 std::ref(stats), std::ref(artists),
-				 std::ref(albums), _1);
-	if (!db.Visit(selection, f, error))
-		return false;
-
+	if (selection.ignore_repeat) {
+		StringSet songs;
+		const auto f = std::bind(StatsVisitUniqueSong,
+					 std::ref(stats), std::ref(artists),
+					 std::ref(albums), std::ref(songs), _1);
+		if (!db.Visit(selection, f, error))
+			return false;
+		stats.song_count = songs.size();
+	} else {
+		const auto f = std::bind(StatsVisitSong,
+					 std::ref(stats), std::ref(artists),
+					 std::ref(albums), _1);
+		if (!db.Visit(selection, f, error))
+			return false;
+	}
 	stats.artist_count = artists.size();
 	stats.album_count = albums.size();
 	return true;

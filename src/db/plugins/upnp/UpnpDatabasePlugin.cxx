@@ -88,6 +88,7 @@ public:
 	void ReturnSong(const LightSong *song) const override;
 
 	virtual bool Visit(const DatabaseSelection &selection,
+			   VisitDirectoryInfo visit_directory_info,
 			   VisitDirectory visit_directory,
 			   VisitSong visit_song,
 			   VisitPlaylist visit_playlist,
@@ -197,8 +198,11 @@ UpnpDatabase::Open(Error &error)
 void
 UpnpDatabase::Close()
 {
-	delete discovery;
-	UpnpClientGlobalFinish();
+	if (discovery != nullptr) {
+		delete discovery;
+		discovery = nullptr;
+		UpnpClientGlobalFinish();
+	}
 }
 
 void
@@ -681,6 +685,7 @@ UpnpDatabase::VisitServer(const ContentDirectoryService &server,
 // Deal with the possibly multiple servers, call VisitServer if needed.
 bool
 UpnpDatabase::Visit(const DatabaseSelection &selection,
+		    VisitDirectoryInfo visit_directory_info,
 		    VisitDirectory visit_directory,
 		    VisitSong visit_song,
 		    VisitPlaylist visit_playlist,

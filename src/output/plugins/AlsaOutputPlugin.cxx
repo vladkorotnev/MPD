@@ -255,45 +255,6 @@ alsa_test_default_device()
 }
 
 /**
- * Convert MPD's #SampleFormat enum to libasound's snd_pcm_format_t
- * enum.  Returns SND_PCM_FORMAT_UNKNOWN if there is no according ALSA
- * PCM format.
- */
-static snd_pcm_format_t
-get_bitformat(SampleFormat sample_format)
-{
-	switch (sample_format) {
-	case SampleFormat::UNDEFINED:
-		return SND_PCM_FORMAT_UNKNOWN;
-
-	case SampleFormat::DSD:
-#ifdef HAVE_ALSA_DSD
-		return SND_PCM_FORMAT_DSD_U8;
-#else
-		return SND_PCM_FORMAT_UNKNOWN;
-#endif
-
-	case SampleFormat::S8:
-		return SND_PCM_FORMAT_S8;
-
-	case SampleFormat::S16:
-		return SND_PCM_FORMAT_S16;
-
-	case SampleFormat::S24_P32:
-		return SND_PCM_FORMAT_S24;
-
-	case SampleFormat::S32:
-		return SND_PCM_FORMAT_S32;
-
-	case SampleFormat::FLOAT:
-		return SND_PCM_FORMAT_FLOAT;
-	}
-
-	assert(false);
-	gcc_unreachable();
-}
-
-/**
  * Determine the byte-swapped PCM format.  Returns
  * SND_PCM_FORMAT_UNKNOWN if the format cannot be byte-swapped.
  */
@@ -461,6 +422,13 @@ configure_hw:
 	if (err < 0)
 		goto error;
 
+	if (!audio_format.IsDSDOrDoP()) {
+		if (audio_format.sample_rate == 705600) {
+			audio_format.format = SampleFormat::S24_P32;
+		} else {
+			audio_format.format = SampleFormat::S32;
+		}
+	}
 	if (ad->use_mmap) {
 		err = snd_pcm_hw_params_set_access(ad->pcm, hwparams,
 						   SND_PCM_ACCESS_MMAP_INTERLEAVED);

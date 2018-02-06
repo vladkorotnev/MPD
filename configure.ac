@@ -1,9 +1,9 @@
 AC_PREREQ(2.60)
 
-AC_INIT(mpd, 0.20, musicpd-dev-team@lists.sourceforge.net)
+AC_INIT(mpd, 1.0, musicpd-dev-team@lists.sourceforge.net)
 
-VERSION_MAJOR=0
-VERSION_MINOR=20
+VERSION_MAJOR=1
+VERSION_MINOR=0
 VERSION_REVISION=0
 VERSION_EXTRA=0
 
@@ -14,7 +14,7 @@ AM_SILENT_RULES
 AC_CONFIG_HEADERS(config.h)
 AC_CONFIG_MACRO_DIR([m4])
 
-AC_DEFINE(PROTOCOL_VERSION, "0.20.0", [The MPD protocol version])
+AC_DEFINE(PROTOCOL_VERSION, "0.34", [The MPD protocol version])
 
 GIT_COMMIT=`GIT_DIR="$srcdir/.git" git describe --dirty --always 2>/dev/null`
 if test x$GIT_COMMIT != x; then
@@ -182,12 +182,21 @@ dnl ---------------------------------------------------------------------------
 dnl Language Checks
 dnl ---------------------------------------------------------------------------
 
-AC_CXX_COMPILE_STDCXX_0X
-if test "$ax_cv_cxx_compile_cxx0x_native" != yes; then
-	if test "$ax_cv_cxx_compile_cxx0x_gxx" = yes; then
-	   	AM_CXXFLAGS="$AM_CXXFLAGS -std=gnu++0x"
-	elif test "$ax_cv_cxx_compile_cxx0x_cxx" = yes; then
-	   	AM_CXXFLAGS="$AM_CXXFLAGS -std=c++0x"
+AX_CXX_COMPILE_STDCXX_14([], [optional])
+if test "$ax_cv_cxx_compile_cxx14_native" != yes; then
+	if test "$ax_cv_cxx_compile_cxx14_gxx" = yes; then
+	   	AM_CXXFLAGS="$AM_CXXFLAGS -std=gnu++14"
+	elif test "$ax_cv_cxx_compile_cxx14_cxx" = yes; then
+	   	AM_CXXFLAGS="$AM_CXXFLAGS -std=c++14"
+	else
+		AC_CXX_COMPILE_STDCXX_0X
+		if test "$ax_cv_cxx_compile_cxx0x_native" != yes; then
+			if test "$ax_cv_cxx_compile_cxx0x_gxx" = yes; then
+				AM_CXXFLAGS="$AM_CXXFLAGS -std=gnu++0x"
+			elif test "$ax_cv_cxx_compile_cxx0x_cxx" = yes; then
+				AM_CXXFLAGS="$AM_CXXFLAGS -std=c++0x"
+			fi
+		fi
 	fi
 fi
 
@@ -438,7 +447,7 @@ dnl ---------------------------------------------------------------------------
 dnl Mandatory Libraries
 dnl ---------------------------------------------------------------------------
 
-no_exceptions=yes
+no_exceptions=no
 
 AX_BOOST_BASE([1.46],, [AC_MSG_ERROR([Boost not found])])
 
@@ -646,7 +655,7 @@ avahi)
 	;;
 esac
 
-MPD_AUTO_PKG(avahi, AVAHI, [avahi-client dbus-1],
+MPD_AUTO_PKG(avahi, AVAHI, [avahi-client dbus-1 avahi-glib],
 	[avahi client library], [avahi-client not found])
 if test x$enable_avahi = xyes; then
 	with_zeroconf=avahi
@@ -859,7 +868,7 @@ MPD_ENABLE_AUTO_LIB(aac, FAAD, faad, NeAACDecOpen, [-lfaad], [],
 
 dnl ---------------------------------- ffmpeg ---------------------------------
 MPD_ENABLE_AUTO_PKG(ffmpeg, FFMPEG,
-	[libavformat >= 53.17 libavcodec >= 53.25 libavutil >= 51.17],
+	[libavformat >= 53.17 libavcodec >= 53.25 libavutil >= 51.17 libavfilter >= 6.22 libpostproc >= 0.0],
 	[ffmpeg decoder library], [libavformat+libavcodec+libavutil not found])
 
 dnl ----------------------------------- FLAC ----------------------------------
@@ -1264,6 +1273,13 @@ fi
 
 AM_CONDITIONAL(ENABLE_WINMM_OUTPUT, test x$enable_winmm_output = xyes)
 
+dnl --------------------------------- Bluetooth -------------------------------------
+AC_ARG_ENABLE(bluetooth,
+	AS_HELP_STRING([--enable-bluetooth],
+		[enable bluetooth (default: disabled)]),,
+	enable_bluetooth=yes)
+
+MPD_DEFINE_CONDITIONAL(enable_bluetooth, ENABLE_BLUETOOTH, [bluetooth])
 dnl ---------------------------------------------------------------------------
 dnl Documentation
 dnl ---------------------------------------------------------------------------

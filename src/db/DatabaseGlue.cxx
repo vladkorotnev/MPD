@@ -43,3 +43,22 @@ DatabaseGlobalInit(EventLoop &loop, DatabaseListener &listener,
 
 	return plugin->create(loop, listener, block, error);
 }
+
+Database *
+UpnpDatabaseInit(EventLoop &loop, DatabaseListener &listener, 
+                   Error &error) 
+{	
+  	        const char *plugin_name = "upnp";
+		const ConfigBlock block;
+
+   	       const DatabasePlugin *plugin = GetDatabasePluginByName(plugin_name);
+		if (plugin == nullptr) {
+			error.Format(db_domain,
+					 "No such database plugin: %s", plugin_name);
+			return nullptr;
+		}
+
+		return plugin->create(loop, listener, block,error);
+}
+
+

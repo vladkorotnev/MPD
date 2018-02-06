@@ -37,4 +37,16 @@ Database *
 DatabaseGlobalInit(EventLoop &loop, DatabaseListener &listener,
 		   const ConfigBlock &block, Error &error);
 
+
+/**
+ * Initialize the database library By database name
+ *
+ * @param block the database configuration block
+ */
+Database *
+UpnpDatabaseInit(EventLoop &loop, DatabaseListener &listener, 
+					   Error &error) ;
+
+
+
 #endif

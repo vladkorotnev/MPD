@@ -22,14 +22,11 @@
 #include "util/Error.hxx"
 #include "util/Domain.hxx"
 
-#include <exception>
-
 #include <assert.h>
 #include <stdio.h>
 #include <string.h>
 #include <errno.h>
 
-/** Domain for std::exception */
 static constexpr Domain exception_domain("exception");
 
 void
@@ -143,8 +140,6 @@ LogError(const std::exception_ptr &ep)
 		std::rethrow_exception(ep);
 	} catch (const std::exception &e) {
 		LogError(e);
-	} catch (const Error &e) {
-		LogError(e);
 	} catch (...) {
 		Log(exception_domain, LogLevel::ERROR,
 		    "Unrecognized exception");
@@ -157,8 +152,6 @@ LogError(const std::exception_ptr &ep, const char *msg)
 	try {
 		std::rethrow_exception(ep);
 	} catch (const std::exception &e) {
-		LogError(e, msg);
-	} catch (const Error &e) {
 		LogError(e, msg);
 	} catch (...) {
 		FormatError(exception_domain,

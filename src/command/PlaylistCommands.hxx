@@ -61,6 +61,21 @@ CommandResult
 handle_playlistadd(Client &client, ConstBuffer<const char *> args);
 
 CommandResult
+handle_playlistsave(Client &client, ConstBuffer<const char *> args);
+
+CommandResult
 handle_listplaylists(Client &client, ConstBuffer<const char *> args);
+
+CommandResult
+handle_loadQueue(Client &client, ConstBuffer<const char *> args);
+
+CommandResult
+handle_saveQueue(Client &client, ConstBuffer<const char *> args);
+
+CommandResult
+handle_addQueueToPlaylist(Client &client, ConstBuffer<const char *> args);
+
+CommandResult
+handle_playlistload(Client &client, ConstBuffer<const char *> args);
 
 #endif

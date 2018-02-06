@@ -31,4 +31,16 @@ handle_listfiles_local(Client &client, const char *path_utf8);
 CommandResult
 handle_read_comments(Client &client, ConstBuffer<const char *> args);
 
+CommandResult
+handle_read_covers(Client &client, ConstBuffer<const char *> args);
+
+CommandResult
+handle_read_cover(Client &client, ConstBuffer<const char *> args);
+
+CommandResult
+handle_read_song_cover(Client &client, ConstBuffer<const char *> args);
+
+CommandResult
+handle_read_folder_cover(Client &client, ConstBuffer<const char *> args);
+
 #endif

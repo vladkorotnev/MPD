@@ -23,9 +23,10 @@
 struct Partition;
 struct DatabaseSelection;
 class Error;
+class Client;
 
 bool
-AddFromDatabase(Partition &partition, const DatabaseSelection &selection,
+AddFromDatabase(Client &client, const DatabaseSelection &selection,
 		Error &error);
 
 #endif

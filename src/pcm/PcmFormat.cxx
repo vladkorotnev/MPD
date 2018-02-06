@@ -166,7 +166,13 @@ pcm_convert_to_16(PcmBuffer &buffer, PcmDither &dither,
 	switch (src_format) {
 	case SampleFormat::UNDEFINED:
 	case SampleFormat::DSD:
-		break;
+#ifdef USE_ALSA_DOP
+	case SampleFormat::DOP64:
+	case SampleFormat::DOP128:
+	case SampleFormat::DOP256:
+	case SampleFormat::DOP512:
+#endif
+	break;
 
 	case SampleFormat::S8:
 		return pcm_allocate_8_to_16(buffer,
@@ -184,6 +190,7 @@ pcm_convert_to_16(PcmBuffer &buffer, PcmDither &dither,
 					     ConstBuffer<int32_t>::FromVoid(src));
 
 	case SampleFormat::FLOAT:
+	case SampleFormat::DOUBLE:
 		return pcm_allocate_float_to_16(buffer,
 						ConstBuffer<float>::FromVoid(src));
 	}
@@ -234,7 +241,13 @@ pcm_convert_to_24(PcmBuffer &buffer,
 	switch (src_format) {
 	case SampleFormat::UNDEFINED:
 	case SampleFormat::DSD:
-		break;
+#ifdef USE_ALSA_DOP
+	case SampleFormat::DOP64:
+	case SampleFormat::DOP128:
+	case SampleFormat::DOP256:
+	case SampleFormat::DOP512:
+#endif
+	break;
 
 	case SampleFormat::S8:
 		return pcm_allocate_8_to_24(buffer,
@@ -252,6 +265,7 @@ pcm_convert_to_24(PcmBuffer &buffer,
 					     ConstBuffer<int32_t>::FromVoid(src));
 
 	case SampleFormat::FLOAT:
+	case SampleFormat::DOUBLE:
 		return pcm_allocate_float_to_24(buffer,
 						ConstBuffer<float>::FromVoid(src));
 	}
@@ -302,6 +316,12 @@ pcm_convert_to_32(PcmBuffer &buffer,
 	switch (src_format) {
 	case SampleFormat::UNDEFINED:
 	case SampleFormat::DSD:
+#ifdef USE_ALSA_DOP
+			case SampleFormat::DOP64:
+			case SampleFormat::DOP128:
+			case SampleFormat::DOP256:
+			case SampleFormat::DOP512:
+#endif
 		break;
 
 	case SampleFormat::S8:
@@ -320,6 +340,7 @@ pcm_convert_to_32(PcmBuffer &buffer,
 		return ConstBuffer<int32_t>::FromVoid(src);
 
 	case SampleFormat::FLOAT:
+	case SampleFormat::DOUBLE:
 		return pcm_allocate_float_to_32(buffer,
 						ConstBuffer<float>::FromVoid(src));
 	}
@@ -370,7 +391,13 @@ pcm_convert_to_float(PcmBuffer &buffer,
 	switch (src_format) {
 	case SampleFormat::UNDEFINED:
 	case SampleFormat::DSD:
-		break;
+#ifdef USE_ALSA_DOP
+	case SampleFormat::DOP64:
+	case SampleFormat::DOP128:
+	case SampleFormat::DOP256:
+	case SampleFormat::DOP512:
+#endif
+	break;
 
 	case SampleFormat::S8:
 		return pcm_allocate_8_to_float(buffer,
@@ -389,6 +416,7 @@ pcm_convert_to_float(PcmBuffer &buffer,
 						   ConstBuffer<int32_t>::FromVoid(src));
 
 	case SampleFormat::FLOAT:
+	case SampleFormat::DOUBLE:
 		return ConstBuffer<float>::FromVoid(src);
 	}
 

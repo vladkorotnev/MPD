@@ -40,6 +40,9 @@ class Error;
 class ClientList;
 struct Partition;
 
+namespace Dms {
+	struct Context;
+}
 struct Instance final
 #if defined(ENABLE_DATABASE) || defined(ENABLE_NEIGHBOR_PLUGINS)
 	:
@@ -62,6 +65,7 @@ struct Instance final
 
 #ifdef ENABLE_DATABASE
 	Database *database;
+	Database *upnpdatabase;
 
 	/**
 	 * This is really a #CompositeStorage.  To avoid heavy include
@@ -76,10 +80,13 @@ struct Instance final
 
 	Partition *partition;
 
+	Dms::Context *dc;
+
 	Instance() {
 #ifdef ENABLE_DATABASE
 		storage = nullptr;
 		update = nullptr;
+		upnpdatabase = nullptr;
 #endif
 	}
 
@@ -90,6 +97,9 @@ struct Instance final
 	 * music_directory was configured).
 	 */
 	Database *GetDatabase(Error &error);
+
+	Database *GetUPnPDatabase(Error &error);
+
 #endif
 
 	/**
@@ -102,6 +112,8 @@ struct Instance final
 	 * Synchronize the player with the play queue.
 	 */
 	void SyncWithPlayer();
+
+	Dms::Context &GetContext();
 
 private:
 #ifdef ENABLE_DATABASE

@@ -28,7 +28,7 @@
 #include "util/Error.hxx"
 
 #include <stdio.h>
-
+#include <string.h>
 static bool
 ReadResultTag(UPnPDirContent &dirbuf, IXML_Document *response, Error &error)
 {
@@ -36,7 +36,43 @@ ReadResultTag(UPnPDirContent &dirbuf, IXML_Document *response, Error &error)
 	if (p == nullptr)
 		p = "";
 
-	return dirbuf.parse(p, error);
+       {  /*add by lyx
+            when ParentID is ""change it to "-1". The ContentDirectory spec says
+            "The parentID of the Content Directory 'root' container must be set to
+            the reserved value of '-1'".
+         */
+          const char *pParentIdStr = strstr(p,"parentID=");
+          char *tempStr = NULL;
+          if (pParentIdStr != NULL) {
+              if(*(pParentIdStr+9)=='\"'){
+                 if (*(pParentIdStr+10) == '\"') {
+                    int i = 0;
+                    int j = 0;
+                    int len = strlen(p)+2;
+                    tempStr = (char *)malloc(len);
+                    while ( i < len) {
+                        if (strncmp(&p[j],"parentID=",9) == 0){
+                           memcpy(&tempStr[i],"parentID=\"-1\"",13);                            
+			   i+=13;
+                           j+=11; 
+                        } else  {
+                          tempStr[i] = p[j];
+                          i++;
+                          j++;
+                        }
+                    }
+                   if(tempStr != NULL) {
+                      dirbuf.parse(tempStr,error);
+                      free(tempStr);
+                      return true;
+                   }
+                 }
+              }
+          } 
+         /*lyx add end  */
+     }
+	
+        return dirbuf.parse(p, error);
 }
 
 inline bool
@@ -56,9 +92,9 @@ ContentDirectoryService::readDirSlice(UpnpClient_Handle hdl,
 				 "ObjectID", objectId,
 				 "BrowseFlag", "BrowseDirectChildren",
 				 "Filter", "*",
-				 "SortCriteria", "",
 				 "StartingIndex", ofbuf,
-				 "RequestedCount", cntbuf);
+				 "RequestedCount", cntbuf,
+                                 "SortCriteria", "");
 	if (request == nullptr) {
 		error.Set(upnp_domain, "UpnpMakeAction() failed");
 		return false;
@@ -125,10 +161,10 @@ ContentDirectoryService::search(UpnpClient_Handle hdl,
 			MakeActionHelper("Search", m_serviceType.c_str(),
 					 "ContainerID", objectId,
 					 "SearchCriteria", ss,
-					 "Filter", "*",
-					 "SortCriteria", "",
+					 "Filter", "*",					 
 					 "StartingIndex", ofbuf,
-					 "RequestedCount", "0"); // Setting a value here gets twonky into fits
+					  "RequestedCount", "0",
+					  "SortCriteria", ""); // Setting a value here gets twonky into fits
 		if (request == 0) {
 			error.Set(upnp_domain, "UpnpMakeAction() failed");
 			return false;
@@ -179,9 +215,9 @@ ContentDirectoryService::getMetadata(UpnpClient_Handle hdl,
 				 "ObjectID", objectId,
 				 "BrowseFlag", "BrowseMetadata",
 				 "Filter", "*",
-				 "SortCriteria", "",
 				 "StartingIndex", "0",
-				 "RequestedCount", "1");
+				 "RequestedCount", "0",
+                                 "SortCriteria", "");
 	if (request == nullptr) {
 		error.Set(upnp_domain, "UpnpMakeAction() failed");
 		return false;

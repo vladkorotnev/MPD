@@ -81,6 +81,10 @@ protected:
 			else if (strcmp(name, "URLBase") == 0)
 				value = &m_device.URLBase;
 			break;
+		case 'u':
+			 if (strcmp(name,"url") == 0 && m_device.device_icon_url.empty())  {			
+			 	value = &m_device.device_icon_url;
+			 }			 				 	
 		}
 	}
 
@@ -127,8 +131,13 @@ UPnPDevice::Parse(const std::string &url, const char *description,
 			} else {
 				URLBase = path_getfather(url);
 			}
-		}
+		}		
+	}	
+	
+	if  (!device_icon_url.empty()){
+		auto  hostUrl = URLBase.find_first_of("/", 7);
+	 	device_icon_url.insert(0,URLBase,0, hostUrl == std::string::npos ? URLBase.length()-1:hostUrl);		
 	}
-
+	
 	return true;
 }

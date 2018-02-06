@@ -25,11 +25,16 @@
 #include "TimePrint.hxx"
 #include "client/Client.hxx"
 #include "tag/Tag.hxx"
+#include "tag/SetExt.hxx"
 #include "LightSong.hxx"
 #include "LightDirectory.hxx"
 #include "PlaylistInfo.hxx"
 #include "Interface.hxx"
 #include "fs/Traits.hxx"
+#include "dms/DmsConfig.hxx"
+#include "Partition.hxx"
+#include "storage/StorageInterface.hxx"
+#include "util/UriUtil.hxx"
 
 #include <functional>
 
@@ -39,6 +44,26 @@ ApplyBaseFlag(const char *uri, bool base)
 	if (base)
 		uri = PathTraitsUTF8::GetBase(uri);
 	return uri;
+}
+
+static bool
+PrintDirectoryInfoBrief(gcc_unused Client &client, gcc_unused bool base, gcc_unused const LightDirectory &directory)
+{
+	return true;
+}
+
+static bool
+PrintDirectoryInfoFull(Client &client, bool base, const LightDirectory &directory)
+{
+	if (!directory.IsRoot()) {
+		client_printf(client, "current_directory: %s\n",
+				  ApplyBaseFlag(directory.GetPath(), base));
+		if (directory.total < std::numeric_limits<unsigned>::max()) {
+			client_printf(client, "total: %u\n", directory.total);
+		}
+	}
+
+	return true;
 }
 
 static void
@@ -63,6 +88,9 @@ PrintDirectoryFull(Client &client, bool base, const LightDirectory &directory)
 	if (!directory.IsRoot()) {
 		PrintDirectoryURI(client, base, directory);
 
+		if (directory.total < std::numeric_limits<unsigned>::max()) {
+			client_printf(client, "total: %u\n", directory.total);
+		}
 		if (directory.mtime > 0)
 			time_print(client, "Last-Modified", directory.mtime);
 	}
@@ -108,10 +136,29 @@ PrintSongBrief(Client &client, bool base, const LightSong &song)
 	return true;
 }
 
+static std::string
+get_parent(std::string str)
+{
+	auto p1 = str.rfind('/');
+	if (p1 == std::string::npos) {
+		return std::string("Folder");
+	}
+
+	auto p2 = str.rfind('/', p1-1);
+	if (p2 == std::string::npos) {
+		return std::string("Folder");
+	}
+	return str.substr(p2+1, p1-p2-1);
+}
+
 static bool
 PrintSongFull(Client &client, bool base, const LightSong &song)
 {
 	song_print_info(client, song, base);
+	if (song.tag && !song.tag->HasType(TAG_ALBUM)) {
+		auto str = get_parent(song.GetURI());
+		client_printf(client, "%s: %s\n", tag_item_names[TAG_ALBUM], str.c_str());
+	}
 
 	if (song.tag->has_playlist)
 		/* this song file has an embedded CUE sheet */
@@ -146,18 +193,31 @@ PrintPlaylistFull(Client &client, bool base,
 }
 
 bool
-db_selection_print(Client &client, const DatabaseSelection &selection,
+db_selection_print(Client &client, DatabaseSelection &selection,
 		   bool full, bool base,
 		   unsigned window_start, unsigned window_end,
 		   Error &error)
 {
 	const Database *db = client.GetDatabase(error);
-	if (db == nullptr)
+	bool result  = false;
+
+	DmsConfig	&df = client.partition.df;
+	DmsSource &source = df.source;
+	if (source.value == SOURCE_UPNP
+		&& selection.uri.empty()) {
+		selection.uri = source.getName();
+	}
+
+	if  (db == nullptr)
 		return false;
 
 	unsigned i = 0;
 
 	using namespace std::placeholders;
+	const auto di = selection.filter == nullptr
+		? std::bind(full ? PrintDirectoryInfoFull : PrintDirectoryInfoBrief,
+			    std::ref(client), base, _1)
+		: VisitDirectoryInfo();
 	const auto d = selection.filter == nullptr
 		? std::bind(full ? PrintDirectoryFull : PrintDirectoryBrief,
 			    std::ref(client), base, _1)
@@ -170,19 +230,22 @@ db_selection_print(Client &client, const DatabaseSelection &selection,
 		: VisitPlaylist();
 
 	if (window_start > 0 ||
-	    window_end < (unsigned)std::numeric_limits<int>::max())
+	    window_end < (unsigned)std::numeric_limits<int>::max()) {
 		s = [s, window_start, window_end, &i](const LightSong &song,
 						      Error &error2){
 			const bool in_window = i >= window_start && i < window_end;
 			++i;
 			return !in_window || s(song, error2);
 		};
+	}
 
-	return db->Visit(selection, d, s, p, error);
+	result |= db->Visit(selection, di, d, s, p, error);
+
+	return  result;
 }
 
 bool
-db_selection_print(Client &client, const DatabaseSelection &selection,
+db_selection_print(Client &client, DatabaseSelection &selection,
 		   bool full, bool base,
 		   Error &error)
 {
@@ -220,11 +283,16 @@ PrintUniqueTags(Client &client, unsigned type, uint32_t group_mask,
 		const SongFilter *filter,
 		Error &error)
 {
+	DmsConfig	&df = client.partition.df;
+	DmsSource &source = df.source;
 	const Database *db = client.GetDatabase(error);
 	if (db == nullptr)
 		return false;
 
-	const DatabaseSelection selection("", true, filter);
+	std::string uri = source.isUpnp() ? source.getName().c_str() : "";
+	bool ignore_repeat = source.isUpnp() ? true : false;
+
+	const DatabaseSelection selection(uri.c_str(), true, ignore_repeat, filter);
 
 	if (type == LOCATE_TAG_FILE_TYPE) {
 		using namespace std::placeholders;

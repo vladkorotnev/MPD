@@ -94,7 +94,7 @@ wildmidi_file_decode(Decoder &decoder, Path path_fs)
 
 	DecoderCommand cmd;
 	do {
-		char buffer[4096];
+		signed char buffer[4096];
 		int len;
 
 		info = WildMidi_GetInfo(wm);

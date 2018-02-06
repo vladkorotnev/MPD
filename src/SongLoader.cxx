@@ -29,6 +29,7 @@
 #include "util/Error.hxx"
 #include "DetachedSong.hxx"
 #include "PlaylistError.hxx"
+#include "tag/Tag.hxx"
 
 #include <assert.h>
 #include <string.h>
@@ -102,9 +103,12 @@ SongLoader::LoadSong(const char *uri_utf8, Error &error) const
 		/* URI relative to the music directory */
 
 #ifdef ENABLE_DATABASE
-		if (db != nullptr)
-			return DatabaseDetachSong(*db, *storage,
+		DetachedSong * dsong = nullptr;
+		if  (db != nullptr) {
+		 	dsong = DatabaseDetachSong(*db, *storage,
 						  uri_utf8, error);
+		}
+		return dsong;
 #endif
 
 		error.Set(playlist_domain, int(PlaylistResult::NO_SUCH_SONG),
@@ -112,3 +116,15 @@ SongLoader::LoadSong(const char *uri_utf8, Error &error) const
 		return nullptr;
 	}
 }
+
+DetachedSong *
+SongLoader::LoadSong(const char *uri_utf8, const Tag &tag, Error &error) const
+{
+	DetachedSong *song = LoadSong(uri_utf8, error);
+	if (song != nullptr) {
+		song->SetTag(tag);
+	}
+
+	return song;
+}
+

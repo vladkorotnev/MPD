@@ -33,12 +33,30 @@
 #include "sticker/SongSticker.hxx"
 #endif
 
+#include "dms/Context.hxx"
+
 Database *
 Instance::GetDatabase(Error &error)
 {
+	if (partition != nullptr) {
+		DmsConfig	&df = partition->df;
+		DmsSource &source = df.source;
+		if(source.isUpnp()) {
+			return GetUPnPDatabase(error);
+		}
+	}
+
 	if (database == nullptr)
 		error.Set(db_domain, DB_DISABLED, "No database");
 	return database;
+}
+
+Database *
+Instance::GetUPnPDatabase(Error &error)
+{
+	if (upnpdatabase == nullptr)
+		error.Set(db_domain, DB_DISABLED, "No upnpdatabase");
+	return upnpdatabase;
 }
 
 #endif
@@ -53,6 +71,14 @@ void
 Instance::SyncWithPlayer()
 {
 	partition->SyncWithPlayer();
+}
+
+Dms::Context &
+Instance::GetContext()
+{
+	assert(dc != nullptr);
+
+	return *dc;
 }
 
 #ifdef ENABLE_DATABASE

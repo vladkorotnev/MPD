@@ -21,6 +21,7 @@
 #define MPD_SONG_SAVE_HXX
 
 #define SONG_BEGIN "song_begin: "
+#define SONG_REAL_URI "real_uri: "
 
 struct Song;
 struct Directory;

@@ -47,6 +47,10 @@
 #include "Partition.hxx"
 #include "Instance.hxx"
 #include "Idle.hxx"
+#include "DmsCommands.hxx"
+#include "neighbor/Glue.hxx"
+#include "neighbor/Info.hxx"
+#include "neighbor/Explorer.hxx"
 
 #ifdef ENABLE_DATABASE
 #include "DatabaseCommands.hxx"
@@ -56,6 +60,14 @@
 
 #include <assert.h>
 #include <string.h>
+
+
+#include "util/Domain.hxx"
+#include "Log.hxx"
+
+
+static constexpr Domain Othercmd_domain("OtherCommands");
+
 
 static void
 print_spl_list(Client &client, const PlaylistVector &list)
@@ -71,7 +83,7 @@ print_spl_list(Client &client, const PlaylistVector &list)
 CommandResult
 handle_urlhandlers(Client &client, gcc_unused ConstBuffer<const char *> args)
 {
-	if (client.IsLocal())
+	if (1 || client.IsLocal())
 		client_puts(client, "handler: file://\n");
 	print_supported_uri_schemes(client);
 	return CommandResult::OK;
@@ -94,6 +106,7 @@ handle_tagtypes(Client &client, gcc_unused ConstBuffer<const char *> args)
 CommandResult
 handle_kill(gcc_unused Client &client, gcc_unused ConstBuffer<const char *> args)
 {
+	FormatDefault(Othercmd_domain,"=====received kill command=====");
 	return CommandResult::KILL;
 }
 
@@ -147,6 +160,7 @@ handle_listfiles(Client &client, ConstBuffer<const char *> args)
 static constexpr tag_handler print_tag_handler = {
 	nullptr,
 	print_tag,
+	nullptr,
 	nullptr,
 };
 
@@ -304,6 +318,7 @@ handle_rescan(Client &client, gcc_unused ConstBuffer<const char *> args)
 	return handle_update(client, args, true);
 }
 
+#if 0 //ndef ENABLE_DMS
 CommandResult
 handle_setvol(Client &client, ConstBuffer<const char *> args)
 {
@@ -327,6 +342,7 @@ handle_setvol(Client &client, ConstBuffer<const char *> args)
 
 	return CommandResult::OK;
 }
+#endif
 
 CommandResult
 handle_volume(Client &client, ConstBuffer<const char *> args)
@@ -393,7 +409,7 @@ handle_password(Client &client, ConstBuffer<const char *> args)
 CommandResult
 handle_config(Client &client, gcc_unused ConstBuffer<const char *> args)
 {
-	if (!client.IsLocal()) {
+	if (0 && !client.IsLocal()) {
 		command_error(client, ACK_ERROR_PERMISSION,
 			      "Command only permitted to local clients");
 		return CommandResult::ERROR;

@@ -38,6 +38,7 @@ PcmChannelsConverter::Open(SampleFormat _format,
 	case SampleFormat::S24_P32:
 	case SampleFormat::S32:
 	case SampleFormat::FLOAT:
+	case SampleFormat::DOUBLE:
 		break;
 
 	default:
@@ -68,6 +69,12 @@ PcmChannelsConverter::Convert(ConstBuffer<void> src, gcc_unused Error &error)
 	case SampleFormat::UNDEFINED:
 	case SampleFormat::S8:
 	case SampleFormat::DSD:
+#ifdef USE_ALSA_DOP
+	case SampleFormat::DOP64:
+	case SampleFormat::DOP128:
+	case SampleFormat::DOP256:
+	case SampleFormat::DOP512:
+#endif
 		assert(false);
 		gcc_unreachable();
 
@@ -87,6 +94,7 @@ PcmChannelsConverter::Convert(ConstBuffer<void> src, gcc_unused Error &error)
 					       ConstBuffer<int32_t>::FromVoid(src)).ToVoid();
 
 	case SampleFormat::FLOAT:
+	case SampleFormat::DOUBLE:
 		return pcm_convert_channels_float(buffer, dest_channels,
 						  src_channels,
 						  ConstBuffer<float>::FromVoid(src)).ToVoid();

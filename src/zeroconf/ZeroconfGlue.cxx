@@ -60,7 +60,7 @@ ZeroconfInit(gcc_unused EventLoop &loop)
 					SERVICE_NAME);
 
 #ifdef HAVE_AVAHI
-	AvahiInit(loop, serviceName);
+	//AvahiInit(loop, serviceName);
 #endif
 
 #ifdef HAVE_BONJOUR
@@ -75,7 +75,7 @@ ZeroconfDeinit()
 		return;
 
 #ifdef HAVE_AVAHI
-	AvahiDeinit();
+	//AvahiDeinit();
 #endif /* HAVE_AVAHI */
 
 #ifdef HAVE_BONJOUR

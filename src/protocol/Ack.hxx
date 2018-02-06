@@ -20,6 +20,10 @@
 #ifndef MPD_ACK_H
 #define MPD_ACK_H
 
+#include <stdexcept>
+
+#include <stdio.h>
+
 class Domain;
 
 enum ack {
@@ -29,6 +33,8 @@ enum ack {
 	ACK_ERROR_PERMISSION = 4,
 	ACK_ERROR_UNKNOWN = 5,
 
+	ACK_ERROR_DMS_IO = 10,
+	
 	ACK_ERROR_NO_EXIST = 50,
 	ACK_ERROR_PLAYLIST_MAX = 51,
 	ACK_ERROR_SYSTEM = 52,
@@ -36,8 +42,31 @@ enum ack {
 	ACK_ERROR_UPDATE_ALREADY = 54,
 	ACK_ERROR_PLAYER_SYNC = 55,
 	ACK_ERROR_EXIST = 56,
+
+	ACK_ERROR_CONNECTION_REFUSED = 111,
 };
 
 extern const Domain ack_domain;
+
+class ProtocolError : public std::runtime_error {
+	enum ack code;
+
+public:
+	ProtocolError(enum ack _code, const char *msg)
+		:std::runtime_error(msg), code(_code) {}
+
+	enum ack GetCode() const {
+		return code;
+	}
+};
+
+template<typename... Args>
+static inline ProtocolError
+FormatProtocolError(enum ack code, const char *fmt, Args&&... args) noexcept
+{
+	char buffer[256];
+	snprintf(buffer, sizeof(buffer), fmt, std::forward<Args>(args)...);
+	return ProtocolError(code, buffer);
+}
 
 #endif

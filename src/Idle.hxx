@@ -67,6 +67,32 @@ static constexpr unsigned IDLE_NEIGHBOR = 0x800;
 /** the mount list has changed */
 static constexpr unsigned IDLE_MOUNT = 0x1000;
 
+static constexpr unsigned IDLE_DMS_SOURCE = 0x2000;
+
+static constexpr unsigned IDLE_DMS_VOLUME = 0x4000;
+
+static constexpr unsigned IDLE_DMS_SRC = 0x8000;
+
+static constexpr unsigned IDLE_DMS_TUBE = 0x10000;
+
+static constexpr unsigned IDLE_DMS_RATE	= 0x20000;
+
+static constexpr unsigned IDLE_DMS_BLUETOOTH	= 0x40000;
+
+static constexpr unsigned IDLE_POWERON	= 0x80000;
+
+static constexpr unsigned IDLE_LOCAL	= 0x100000;
+
+static constexpr unsigned IDLE_USERTIPS	= 0x200000;
+
+static constexpr unsigned IDLE_LOGIN	= 0x400000;
+
+static constexpr unsigned IDLE_SOUND_QUALITY	= 0x800000;
+
+static constexpr unsigned IDLE_ALBUM_URI	= 0x1000000;
+
+static constexpr unsigned IDLE_CONFIG	= 0x20000000;
+
 /**
  * Adds idle flag (with bitwise "or") and queues notifications to all
  * clients.

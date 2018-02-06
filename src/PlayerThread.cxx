@@ -330,8 +330,15 @@ Player::WaitForDecoder()
 	if (error.IsDefined()) {
 		pc.SetError(PlayerError::DECODER, std::move(error));
 
-		delete pc.next_song;
+		delete song;
+		song = pc.next_song;
+		elapsed_time = SongTime::zero();
+		pc.total_time = pc.next_song->GetDuration();
+		pc.bit_rate = 0;
+		pc.audio_format.Clear();
 		pc.next_song = nullptr;
+		/* call syncPlaylistWithQueue() in the main thread */
+		pc.listener.OnPlayerSync();
 
 		pc.Unlock();
 
@@ -591,6 +598,10 @@ Player::SeekDecoder()
 inline void
 Player::ProcessCommand()
 {
+	if (pc.command != PlayerCommand::NONE &&
+		pc.command != PlayerCommand::REFRESH) {
+		FormatDefault(player_domain, "%s cmd=%s", __func__, getCommandName(pc.command));
+	}
 	switch (pc.command) {
 	case PlayerCommand::NONE:
 	case PlayerCommand::STOP:
@@ -612,6 +623,13 @@ Player::ProcessCommand()
 
 		queued = true;
 		pc.CommandFinished();
+
+#if 0 // fix 5 seconds files may jump to next song
+		pc.Unlock();
+		if (dc.LockIsIdle())
+			StartDecoder(*new MusicPipe());
+		pc.Lock();
+#endif
 		break;
 
 	case PlayerCommand::PAUSE:
@@ -677,7 +695,10 @@ Player::ProcessCommand()
 		pc.elapsed_time = !pc.outputs.GetElapsedTime().IsNegative()
 			? SongTime(pc.outputs.GetElapsedTime())
 			: elapsed_time;
-
+		pc.bufferd_time = pipe == nullptr
+			? pc.bufferd_time
+			: pipe->bufferd_time;
+		
 		pc.CommandFinished();
 		break;
 	}
@@ -686,14 +707,18 @@ Player::ProcessCommand()
 static void
 update_song_tag(PlayerControl &pc, DetachedSong &song, const Tag &new_tag)
 {
-	if (song.IsFile())
+	//if (song.IsFile())
 		/* don't update tags of local files, only remote
 		   streams may change tags dynamically */
-		return;
+		//return;
 
 	song.SetTag(new_tag);
 
 	pc.LockSetTaggedSong(song);
+
+	if (song.GetDuration().IsPositive()) {
+		pc.total_time = song.GetDuration();
+	}
 
 	/* the main thread will update the playlist version when he
 	   receives this event */
@@ -933,6 +958,11 @@ Player::Run()
 		if (pc.command == PlayerCommand::STOP ||
 		    pc.command == PlayerCommand::EXIT ||
 		    pc.command == PlayerCommand::CLOSE_AUDIO) {
+		    if (pc.next_song != nullptr) {
+				delete pc.next_song;
+				pc.next_song = nullptr;
+				queued = false;
+			}
 			pc.Unlock();
 			pc.outputs.Cancel();
 			break;
@@ -1118,6 +1148,10 @@ player_task(void *arg)
 	pc.Lock();
 
 	while (1) {
+		if (pc.command != PlayerCommand::NONE &&
+			pc.command != PlayerCommand::REFRESH) {
+			FormatError(player_domain, "%s cmd=%s", __func__, getCommandName(pc.command));
+		}
 		switch (pc.command) {
 		case PlayerCommand::SEEK:
 		case PlayerCommand::QUEUE:
@@ -1130,6 +1164,7 @@ player_task(void *arg)
 			break;
 
 		case PlayerCommand::STOP:
+			FormatDefault(player_domain, "%d mute=true", __LINE__);
 			pc.Unlock();
 			pc.outputs.Cancel();
 			pc.Lock();
@@ -1137,6 +1172,7 @@ player_task(void *arg)
 			/* fall through */
 
 		case PlayerCommand::PAUSE:
+			FormatDefault(player_domain, "%d mute=true", __LINE__);
 			delete pc.next_song;
 			pc.next_song = nullptr;
 
@@ -1144,6 +1180,7 @@ player_task(void *arg)
 			break;
 
 		case PlayerCommand::CLOSE_AUDIO:
+			FormatDefault(player_domain, "%d mute=true", __LINE__);
 			pc.Unlock();
 
 			pc.outputs.Release();
@@ -1163,6 +1200,7 @@ player_task(void *arg)
 			break;
 
 		case PlayerCommand::EXIT:
+			FormatDefault(player_domain, "%d mute=true", __LINE__);
 			pc.Unlock();
 
 			dc.Quit();

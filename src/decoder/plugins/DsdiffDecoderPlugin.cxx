@@ -191,7 +191,8 @@ dsdiff_handle_native_tag(InputStream &is,
 			 void *handler_ctx, offset_type tagoffset,
 			 TagType type)
 {
-	if (!dsdlib_skip_to(nullptr, is, tagoffset))
+	if (handler->tag == nullptr ||
+		!dsdlib_skip_to(nullptr, is, tagoffset))
 		return;
 
 	struct dsdiff_native_tag metatag;
@@ -330,6 +331,12 @@ dsdiff_read_metadata(Decoder *decoder, InputStream &is,
 		} else if (chunk_header->id.Equals("DSD ")) {
 			const offset_type chunk_size = chunk_header->GetSize();
 			metadata->chunk_size = chunk_size;
+			if (is.KnownSize()) {
+				auto left_size = is.GetRest();
+				if (metadata->chunk_size > left_size) {
+					metadata->chunk_size = left_size;
+				}
+			}
 			return true;
 		} else {
 			/* ignore unknown chunk */

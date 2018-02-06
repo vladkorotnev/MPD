@@ -24,6 +24,7 @@
 #include "TagString.hxx"
 #include "Tag.hxx"
 #include "util/WritableBuffer.hxx"
+#include "util/ConstBuffer.hxx"
 
 #include <array>
 
@@ -111,6 +112,39 @@ TagBuilder::Clear()
 	duration = SignedSongTime::Negative();
 	has_playlist = false;
 	RemoveAll();
+}
+
+bool
+TagBuilder::Parse(ConstBuffer<const char *> args)
+{
+	if (args.size == 0 || args.size % 2 != 0)
+		return false;
+
+	for (unsigned i = 0; i < args.size; i += 2) {
+		if (strcasecmp(args[i], "duration_ms") == 0) {
+			char *test;
+			uint32_t dst = strtoul(args[i + 1], &test, 10);
+			if (test == args[i + 1] || *test != '\0') {
+				return false;
+			}
+			duration = SignedSongTime::FromMS(dst);
+		} else if (strcasecmp(args[i], "duration") == 0) {
+			char *test;
+			double dst = strtod(args[i + 1], &test);
+			if (test == args[i + 1] || *test != '\0') {
+				return false;
+			}
+			duration = SignedSongTime::FromS(dst);
+		} else {
+			const TagType tag_type = tag_name_parse_i(args[i]);
+			if (tag_type == TAG_NUM_OF_ITEM_TYPES) {
+				return false;
+			}
+			AddItem(tag_type, args[i + 1]);
+		}
+	}
+
+	return true;
 }
 
 void

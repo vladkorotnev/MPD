@@ -110,12 +110,46 @@ public:
 		tail += n;
 	}
 
+	bool CanReadLine() {
+		for (size_type i=head;i<tail;i++) {
+			if ((data[i] == '\r' || data[i] == '\n')) {
+				return true;
+			}
+		}
+		return false;
+	}
+
 	/**
 	 * Return a buffer range which may be read.  The buffer pointer is
 	 * writable, to allow modifications while parsing.
 	 */
 	Range Read() {
 		return Range(data + head, tail - head);
+	}
+
+	Range ReadLine() {
+		size_type line = -1;
+		size_type h;
+		for (h=head;h<tail;h++) {
+			if ((data[h] != '\r' && data[h] != '\n')) {
+				break;
+			}
+		}
+		if (h != head) {
+			Consume(h-head);
+		}
+		for (size_type i=head;i<tail;i++) {
+			if ((data[i] == '\r' || data[i] == '\n')) {
+				data[i] = '\0';
+				line = i+1;
+				break;
+			}
+		}
+		if (line == (unsigned)-1) {
+			return Range(data + head, 0);
+		} else {
+			return Range(data + head, line - head);
+		}
 	}
 
 	/**

@@ -21,6 +21,7 @@
 #define MPD_DB_SIMPLE_MOUNT_HXX
 
 #include "db/Visitor.hxx"
+#include "db/Selection.hxx"
 
 class Database;
 class SongFilter;
@@ -28,7 +29,7 @@ class Error;
 
 bool
 WalkMount(const char *base, const Database &db,
-	  bool recursive, const SongFilter *filter,
+	  const DatabaseSelection &selection,
 	  const VisitDirectory &visit_directory, const VisitSong &visit_song,
 	  const VisitPlaylist &visit_playlist,
 	  Error &error);

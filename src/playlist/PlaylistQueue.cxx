@@ -28,6 +28,13 @@
 #include "thread/Cond.hxx"
 #include "fs/Traits.hxx"
 #include "util/Error.hxx"
+#include "dms/DmsControl.hxx"
+#include "fs/io/BufferedOutputStream.hxx"
+#include "fs/io/FileOutputStream.hxx"
+#include "PlaylistSave.hxx"
+#include "PlaylistFile.hxx"
+#include "util/StringUtil.hxx"
+#include "fs/FileSystem.hxx"
 
 #ifdef ENABLE_DATABASE
 #include "SongLoader.hxx"
@@ -38,7 +45,7 @@ playlist_load_into_queue(const char *uri, SongEnumerator &e,
 			 unsigned start_index, unsigned end_index,
 			 playlist &dest, PlayerControl &pc,
 			 const SongLoader &loader,
-			 Error &error)
+			 Error &error, BufferedOutputStream *bos)
 {
 	const std::string base_uri = uri != nullptr
 		? PathTraitsUTF8::GetParent(uri)
@@ -60,6 +67,9 @@ playlist_load_into_queue(const char *uri, SongEnumerator &e,
 			continue;
 		}
 
+		if (bos != nullptr) {
+			playlist_print_song(*bos, *song);
+		}
 		unsigned id = dest.AppendSong(pc, std::move(*song), error);
 		delete song;
 		if (id == 0)

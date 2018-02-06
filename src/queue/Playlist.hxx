@@ -31,6 +31,7 @@ class Error;
 class SongLoader;
 class SongTime;
 class SignedSongTime;
+struct Tag;
 
 struct playlist {
 	/**
@@ -207,6 +208,12 @@ public:
 	unsigned AppendURI(PlayerControl &pc,
 			   const SongLoader &loader,
 			   const char *uri_utf8,
+			   Error &error);
+
+	unsigned AppendURI(PlayerControl &pc,
+			   const SongLoader &loader,
+			   const char *uri_utf8,
+			   const Tag &tag,
 			   Error &error);
 
 protected:

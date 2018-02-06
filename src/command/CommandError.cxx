@@ -22,8 +22,11 @@
 #include "db/DatabaseError.hxx"
 #include "protocol/Result.hxx"
 #include "util/Error.hxx"
+#include "client/Response.hxx"
 #include "Log.hxx"
+#include "util/Exception.hxx"
 
+#include <system_error>
 #include <assert.h>
 #include <string.h>
 #include <errno.h>
@@ -110,7 +113,8 @@ print_error(Client &client, const Error &error)
 			return CommandResult::ERROR;
 
 		case DB_NOT_FOUND:
-			command_error(client, ACK_ERROR_NO_EXIST, "Not found");
+			command_error(client, ACK_ERROR_NO_EXIST, "Not found: %s",
+					error.GetMessage());
 			return CommandResult::ERROR;
 
 		case DB_CONFLICT:
@@ -119,11 +123,57 @@ print_error(Client &client, const Error &error)
 		}
 #endif
 	} else if (error.IsDomain(errno_domain)) {
-		command_error(client, ACK_ERROR_SYSTEM, "%s",
-			      strerror(error.GetCode()));
+		switch (error.GetCode()) {
+		case ECONNREFUSED:
+			command_error(client, ACK_ERROR_CONNECTION_REFUSED, "%s",
+				      strerror(error.GetCode()));
+			break;
+		default:
+			command_error(client, ACK_ERROR_SYSTEM, "%s",
+				      strerror(error.GetCode()));
+		}
 		return CommandResult::ERROR;
 	}
 
-	command_error(client, ACK_ERROR_UNKNOWN, "error");
+	command_error(client, ACK_ERROR_UNKNOWN, "error:%s", error.GetMessage());
 	return CommandResult::ERROR;
+}
+
+gcc_pure
+static enum ack
+ToAck(std::exception_ptr ep)
+{
+	try {
+		std::rethrow_exception(ep);
+	} catch (const ProtocolError &pe) {
+		return pe.GetCode();
+	} catch (const std::system_error &e) {
+		return ACK_ERROR_SYSTEM;
+	} catch (const std::invalid_argument &e) {
+		return ACK_ERROR_ARG;
+#if defined(__GLIBCXX__) && __GLIBCXX__ < 20151204
+	} catch (const std::exception &e) {
+#else
+	} catch (...) {
+#endif
+		try {
+#if defined(__GLIBCXX__) && __GLIBCXX__ < 20151204
+			/* workaround for g++ 4.x: no overload for
+			   rethrow_exception(exception_ptr) */
+			std::rethrow_if_nested(e);
+#else
+			std::rethrow_if_nested(ep);
+#endif
+			return ACK_ERROR_UNKNOWN;
+		} catch (...) {
+			return ToAck(std::current_exception());
+		}
+	}
+}
+
+void
+PrintError(Response &r, std::exception_ptr ep)
+{
+	LogError(ep);
+	r.Error(ToAck(ep), FullMessage(ep).c_str());
 }

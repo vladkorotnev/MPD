@@ -28,6 +28,12 @@
 #include "neighbor/Listener.hxx"
 #include "neighbor/Info.hxx"
 #include "Log.hxx"
+#include "config/ConfigGlobal.hxx"
+#include "config/ConfigError.hxx"
+#include "config/Block.hxx"
+#include "util/Domain.hxx"
+#include <stdio.h>
+static constexpr Domain upnp_neighbor_domain("upnp_neighbor");
 
 class UpnpNeighborExplorer final
 	: public NeighborExplorer, UPnPDiscoveryListener {
@@ -48,19 +54,20 @@ class UpnpNeighborExplorer final
 
 		gcc_pure
 		NeighborInfo Export() const {
-			return { "smb://" + name + "/", comment };
+			return { "smb://" + name + "/", comment,"", ""};  //???why smb
 		}
 	};
 
 	UPnPDeviceDirectory *discovery;
 
 public:
-	UpnpNeighborExplorer(NeighborListener &_listener)
-		:NeighborExplorer(_listener) {}
+	UpnpNeighborExplorer(NeighborListener &_listener, const char *_name)
+		:NeighborExplorer(_listener, _name), discovery(nullptr) {}
 
 	/* virtual methods from class NeighborExplorer */
 	virtual bool Open(Error &error) override;
 	virtual void Close() override;
+	virtual bool Reopen(Error &error) override;
 	virtual List GetList() const override;
 
 private:
@@ -79,6 +86,7 @@ UpnpNeighborExplorer::Open(Error &error)
 	discovery = new UPnPDeviceDirectory(handle, this);
 	if (!discovery->Start(error)) {
 		delete discovery;
+		discovery = nullptr;
 		UpnpClientGlobalFinish();
 		return false;
 	}
@@ -89,8 +97,24 @@ UpnpNeighborExplorer::Open(Error &error)
 void
 UpnpNeighborExplorer::Close()
 {
-	delete discovery;
-	UpnpClientGlobalFinish();
+	if (discovery != nullptr) {
+		delete discovery;
+		discovery = nullptr;
+		UpnpClientGlobalFinish();
+	}
+}
+
+bool
+UpnpNeighborExplorer::Reopen(Error &error)
+{
+	FormatDefault(upnp_neighbor_domain, "%s %d", __func__, __LINE__);
+	Close();
+	if (!Open(error)) {
+		FormatDefault(upnp_neighbor_domain, "%s %d open error=%s", __func__, __LINE__, error.GetMessage());
+		return false;
+	}
+
+	return true;
 }
 
 NeighborExplorer::List
@@ -100,37 +124,41 @@ UpnpNeighborExplorer::GetList() const
 
 	{
 		Error error;
-		if (!discovery->GetDirectories(tmp, error))
-			LogError(error);
+		if (!discovery || !discovery->GetDirectories(tmp, error)) {
+			//LogError(error);
+		}
 	}
 
 	List result;
-	for (const auto &i : tmp)
-		result.emplace_front(i.GetURI(), i.getFriendlyName());
+	for (const auto &i : tmp) {
+		result.emplace_front(i.GetURI(), i.getFriendlyName(),i.getDeviceIconUrl(), "");
+	
+	}
+
 	return result;
 }
 
 void
 UpnpNeighborExplorer::FoundUPnP(const ContentDirectoryService &service)
 {
-	const NeighborInfo n(service.GetURI(), service.getFriendlyName());
+	const NeighborInfo n(service.GetURI(), service.getFriendlyName(),service.getDeviceIconUrl(), "");
 	listener.FoundNeighbor(n);
 }
 
 void
 UpnpNeighborExplorer::LostUPnP(const ContentDirectoryService &service)
 {
-	const NeighborInfo n(service.GetURI(), service.getFriendlyName());
+	const NeighborInfo n(service.GetURI(), service.getFriendlyName(),service.getDeviceIconUrl(), "");
 	listener.LostNeighbor(n);
 }
 
 static NeighborExplorer *
 upnp_neighbor_create(gcc_unused EventLoop &loop,
 		     NeighborListener &listener,
-		     gcc_unused const ConfigBlock &block,
+		     const ConfigBlock &block,
 		     gcc_unused Error &error)
 {
-	return new UpnpNeighborExplorer(listener);
+	return new UpnpNeighborExplorer(listener, block.GetBlockValue("plugin"));
 }
 
 const NeighborPlugin upnp_neighbor_plugin = {

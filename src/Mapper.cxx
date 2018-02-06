@@ -27,6 +27,7 @@
 #include "fs/Traits.hxx"
 #include "fs/Charset.hxx"
 #include "fs/CheckFile.hxx"
+#include "util/StringUtil.hxx"
 
 #ifdef ENABLE_DATABASE
 #include "storage/StorageInterface.hxx"

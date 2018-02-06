@@ -232,7 +232,7 @@ Directory::Walk(bool recursive, const SongFilter *filter,
 		   call will lock it again */
 		db_unlock();
 		bool result = WalkMount(GetPath(), *mounted_database,
-					recursive, filter,
+					DatabaseSelection("", recursive, filter),
 					visit_directory, visit_song,
 					visit_playlist,
 					error);

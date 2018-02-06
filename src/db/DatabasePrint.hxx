@@ -34,11 +34,11 @@ class Error;
  * @param base print only base name of songs/directories?
  */
 bool
-db_selection_print(Client &client, const DatabaseSelection &selection,
+db_selection_print(Client &client, DatabaseSelection &selection,
 		   bool full, bool base, Error &error);
 
 bool
-db_selection_print(Client &client, const DatabaseSelection &selection,
+db_selection_print(Client &client, DatabaseSelection &selection,
 		   bool full, bool base,
 		   unsigned window_start, unsigned window_end,
 		   Error &error);

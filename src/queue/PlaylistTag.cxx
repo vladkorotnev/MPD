@@ -43,7 +43,7 @@ playlist::AddSongIdTag(unsigned id, TagType tag_type, const char *value,
 	}
 
 	DetachedSong &song = queue.Get(position);
-	if (song.IsFile()) {
+	if (0 && song.IsFile()) { // allow edit tags of local file, because we need modify AlbumUri
 		error.Set(playlist_domain, int(PlaylistResult::DENIED),
 			  "Cannot edit tags of local file");
 		return false;

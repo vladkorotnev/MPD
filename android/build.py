@@ -15,7 +15,7 @@ ndk_path = sys.argv[2]
 configure_args = sys.argv[3:]
 
 if not os.path.isfile(os.path.join(sdk_path, 'tools', 'android')):
-    print("SDK not found in", ndk_path, file=sys.stderr)
+    print("SDK not found in", sdk_path, file=sys.stderr)
     sys.exit(1)
 
 if not os.path.isdir(ndk_path):

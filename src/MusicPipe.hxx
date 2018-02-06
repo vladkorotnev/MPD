@@ -22,6 +22,7 @@
 
 #include "thread/Mutex.hxx"
 #include "Compiler.h"
+#include "Chrono.hxx"
 
 #ifndef NDEBUG
 #include "AudioFormat.hxx"
@@ -40,6 +41,8 @@ class MusicPipe {
 	/** the first chunk */
 	MusicChunk *head;
 
+	MusicChunk *tail;
+
 	/** a pointer to the tail of the chunk */
 	MusicChunk **tail_r;
 
@@ -54,11 +57,14 @@ class MusicPipe {
 #endif
 
 public:
+	SignedSongTime bufferd_time;
+
+public:
 	/**
 	 * Creates a new #MusicPipe object.  It is empty.
 	 */
 	MusicPipe()
-		:head(nullptr), tail_r(&head), size(0) {
+		:head(nullptr), tail(nullptr), tail_r(&head), size(0), bufferd_time(0) {
 #ifndef NDEBUG
 		audio_format.Clear();
 #endif
@@ -128,6 +134,8 @@ public:
 	bool IsEmpty() const {
 		return GetSize() == 0;
 	}
+
+	SignedSongTime GetTailSongTime() const;
 };
 
 #endif

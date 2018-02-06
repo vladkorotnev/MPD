@@ -43,6 +43,10 @@ struct Partition;
 class Database;
 class Storage;
 
+namespace Dms {
+	struct Context;
+}
+
 class Client final
 	: FullyBufferedSocket, TimeoutMonitor,
 	  public boost::intrusive::list_base_hook<boost::intrusive::link_mode<boost::intrusive::normal_link>> {
@@ -50,6 +54,7 @@ public:
 	Partition &partition;
 	struct playlist &playlist;
 	struct PlayerControl &player_control;
+	Dms::Context &context;
 
 	struct Disposer {
 		void operator()(Client *client) const {
@@ -113,6 +118,13 @@ public:
 	void SetExpired();
 
 	using FullyBufferedSocket::Write;
+
+	bool Write(const void *data, size_t length);
+
+	/**
+	 * Write a null-terminated string.
+	 */
+	bool Write(const char *data);
 
 	/**
 	 * returns the uid of the client process, or a negative value
@@ -190,6 +202,8 @@ public:
 	gcc_pure
 	const Storage *GetStorage() const;
 
+	Dms::Context &GetContext();
+
 private:
 	/* virtual methods from class BufferedSocket */
 	virtual InputResult OnSocketInput(void *data, size_t length) override;
@@ -200,12 +214,22 @@ private:
 	virtual void OnTimeout() override;
 };
 
+struct IgnoreClient final {
+	Client client;
+	IgnoreClient();
+};
+
 void
 client_manager_init();
 
 void
 client_new(EventLoop &loop, Partition &partition,
 	   int fd, SocketAddress address, int uid);
+
+/**
+ * Write a block of data to the client.
+ */
+void client_write(Client &client, const char *data, size_t length);
 
 /**
  * Write a C string to the client.

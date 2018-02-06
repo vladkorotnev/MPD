@@ -113,10 +113,17 @@ PcmVolume::Open(SampleFormat _format, Error &error)
 	case SampleFormat::S24_P32:
 	case SampleFormat::S32:
 	case SampleFormat::FLOAT:
+	case SampleFormat::DOUBLE:
 		break;
 
 	case SampleFormat::DSD:
-		// TODO: implement this; currently, it's a no-op
+#ifdef USE_ALSA_DOP
+	case SampleFormat::DOP64:
+	case SampleFormat::DOP128:
+	case SampleFormat::DOP256:
+	case SampleFormat::DOP512:
+#endif
+	// TODO: implement this; currently, it's a no-op
 		break;
 	}
 
@@ -174,6 +181,7 @@ PcmVolume::Apply(ConstBuffer<void> src)
 		break;
 
 	case SampleFormat::FLOAT:
+	case SampleFormat::DOUBLE:
 		pcm_volume_change_float((float *)data,
 					(const float *)src.data,
 					src.size / sizeof(float),
@@ -181,7 +189,13 @@ PcmVolume::Apply(ConstBuffer<void> src)
 		break;
 
 	case SampleFormat::DSD:
-		// TODO: implement this; currently, it's a no-op
+#ifdef USE_ALSA_DOP
+	case SampleFormat::DOP64:
+	case SampleFormat::DOP128:
+	case SampleFormat::DOP256:
+	case SampleFormat::DOP512:
+#endif
+	// TODO: implement this; currently, it's a no-op
 		return src;
 	}
 

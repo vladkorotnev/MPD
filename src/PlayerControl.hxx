@@ -33,6 +33,7 @@
 class PlayerListener;
 class MultipleOutputs;
 class DetachedSong;
+class Partition;
 
 enum class PlayerState : uint8_t {
 	STOP,
@@ -91,9 +92,14 @@ struct player_status {
 	AudioFormat audio_format;
 	SignedSongTime total_time;
 	SongTime elapsed_time;
+	SignedSongTime bufferd_time;
 };
 
+const char *getCommandName(PlayerCommand cmd);
+
 struct PlayerControl {
+	Partition &partition;
+
 	PlayerListener &listener;
 
 	MultipleOutputs &outputs;
@@ -153,6 +159,7 @@ struct PlayerControl {
 	AudioFormat audio_format;
 	SignedSongTime total_time;
 	SongTime elapsed_time;
+	SignedSongTime bufferd_time;
 
 	/**
 	 * The next queued song.
@@ -177,7 +184,7 @@ struct PlayerControl {
 	 */
 	bool border_pause;
 
-	PlayerControl(PlayerListener &_listener,
+	PlayerControl(Partition &_partition, PlayerListener &_listener,
 		      MultipleOutputs &_outputs,
 		      unsigned buffer_chunks,
 		      unsigned buffered_before_play);
@@ -224,6 +231,12 @@ struct PlayerControl {
 		assert(thread.IsInside());
 
 		cond.wait(mutex);
+	}
+
+	void Wait(unsigned timeout_ms) {
+		assert(thread.IsInside());
+
+		cond.timed_wait(mutex, timeout_ms);
 	}
 
 	/**

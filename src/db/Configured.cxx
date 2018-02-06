@@ -75,3 +75,11 @@ CreateConfiguredDatabase(EventLoop &loop, DatabaseListener &listener,
 	delete allocated;
 	return db;
 }
+
+Database * CreateUpnpDatabase(EventLoop &loop, DatabaseListener &listener,
+			 Error &error)
+{
+	Database *db = UpnpDatabaseInit(loop, listener,error);
+        return db;
+}
+

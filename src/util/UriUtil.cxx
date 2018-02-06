@@ -51,6 +51,11 @@ uri_get_suffix(const char *uri)
 	if (strpbrk(suffix, "/\\") != nullptr)
 		return nullptr;
 
+	if (strchr(suffix, ':') != nullptr) {
+		// in case of "http://108.163.190.211:9950"
+		return nullptr;
+	}
+
 	return suffix;
 }
 

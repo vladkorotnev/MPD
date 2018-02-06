@@ -21,6 +21,9 @@
 #define MPD_PROTOCOL_ARGPARSER_HXX
 
 #include "check.h"
+#include "Compiler.h"
+
+#include <limits>
 
 #include <stdint.h>
 
@@ -48,9 +51,70 @@ bool
 check_float(Client &client, float *value_r, const char *s);
 
 bool
+check_double(Client &client, double *value_r, const char *s);
+
+bool
+check_hex(Client &client, const char *s);
+
+bool
 ParseCommandArg(Client &client, SongTime &value_r, const char *s);
 
 bool
 ParseCommandArg(Client &client, SignedSongTime &value_r, const char *s);
+
+
+
+gcc_pure
+uint32_t
+ParseCommandArgU32(const char *s);
+
+gcc_pure
+int
+ParseCommandArgInt(const char *s, int min_value, int max_value);
+
+gcc_pure
+int
+ParseCommandArgInt(const char *s);
+
+struct RangeArg {
+	unsigned start, end;
+
+	void SetAll() {
+		start = 0;
+		end = std::numeric_limits<unsigned>::max();
+	}
+
+	static constexpr RangeArg All() {
+		return { 0, std::numeric_limits<unsigned>::max() };
+	}
+};
+
+gcc_pure
+RangeArg
+ParseCommandArgRange(const char *s);
+
+gcc_pure
+unsigned
+ParseCommandArgUnsigned(const char *s, unsigned max_value);
+
+gcc_pure
+unsigned
+ParseCommandArgUnsigned(const char *s);
+
+gcc_pure
+bool
+ParseCommandArgBool(const char *s);
+
+gcc_pure
+float
+ParseCommandArgFloat(const char *s);
+
+gcc_pure
+SongTime
+ParseCommandArgSongTime(const char *s);
+
+gcc_pure
+SignedSongTime
+ParseCommandArgSignedSongTime(const char *s);
 
 #endif

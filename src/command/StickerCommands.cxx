@@ -23,6 +23,7 @@
 #include "db/Interface.hxx"
 #include "db/DatabaseGlue.hxx"
 #include "sticker/SongSticker.hxx"
+#include "sticker/MiscSticker.hxx"
 #include "sticker/StickerPrint.hxx"
 #include "sticker/StickerDatabase.hxx"
 #include "CommandError.hxx"
@@ -192,6 +193,75 @@ handle_sticker_song(Client &client, ConstBuffer<const char *> args)
 	}
 }
 
+static CommandResult
+handle_sticker_misc(Client &client, ConstBuffer<const char *> args)
+{
+	Error error; 
+
+	const char *const cmd = args.front();
+
+	/* get misc id key */
+	if (args.size == 4 && strcmp(cmd, "get") == 0) {
+		const auto value = sticker_misc_get_value(args[2], args[3],
+							  error);
+		if (value.empty()) {
+			if (error.IsDefined())
+				return print_error(client, error);
+
+			command_error(client, ACK_ERROR_NO_EXIST,
+				      "no such sticker");
+			return CommandResult::ERROR;
+		}
+
+		sticker_print_value(client, args[3], value.c_str());
+
+		return CommandResult::OK;
+	/* list misc */
+	} else if (args.size == 3 && strcmp(cmd, "list") == 0) {
+		Sticker *sticker = sticker_misc_get(args[2], error);
+		if (sticker) {
+			sticker_print(client, *sticker);
+			sticker_free(sticker);
+		} else if (error.IsDefined())
+			return print_error(client, error);
+
+		return CommandResult::OK;
+	/* set misc id key */
+	} else if (args.size == 5 && strcmp(cmd, "set") == 0) {
+		bool ret = sticker_misc_set_value(args[2], args[3], args[4],
+						  error);
+		if (!ret) {
+			if (error.IsDefined())
+				return print_error(client, error);
+
+			command_error(client, ACK_ERROR_SYSTEM,
+				      "failed to set sticker value");
+			return CommandResult::ERROR;
+		}
+
+		return CommandResult::OK;
+	/* delete misc [key] */
+	} else if ((args.size == 3 || args.size == 4) &&
+		   strcmp(cmd, "delete") == 0) {
+		bool ret = args.size == 3
+			? sticker_misc_delete(args[2], error)
+			: sticker_misc_delete_value(args[2], args[3], error);
+		if (!ret) {
+			if (error.IsDefined())
+				return print_error(client, error);
+
+			command_error(client, ACK_ERROR_SYSTEM,
+				      "no such sticker");
+			return CommandResult::ERROR;
+		}
+
+		return CommandResult::OK;
+	} else {
+		command_error(client, ACK_ERROR_ARG, "bad request");
+		return CommandResult::ERROR;
+	}
+}
+
 CommandResult
 handle_sticker(Client &client, ConstBuffer<const char *> args)
 {
@@ -205,6 +275,8 @@ handle_sticker(Client &client, ConstBuffer<const char *> args)
 
 	if (strcmp(args[1], "song") == 0)
 		return handle_sticker_song(client, args);
+	else if (strcmp(args[1], "misc") == 0)
+		return handle_sticker_misc(client, args);
 	else {
 		command_error(client, ACK_ERROR_ARG,
 			      "unknown sticker domain");

@@ -20,11 +20,17 @@
 #ifndef MPD_FFMPEG_METADATA_HXX
 #define MPD_FFMPEG_METADATA_HXX
 
+
+struct AVFormatContext;
 struct AVDictionary;
 struct tag_handler;
 
 void
 FfmpegScanDictionary(AVDictionary *dict,
 		     const tag_handler *handler, void *handler_ctx);
+
+void
+FfmpegScanCover(AVFormatContext &format_context,
+		     const struct tag_handler *handler, void *handler_ctx);
 
 #endif

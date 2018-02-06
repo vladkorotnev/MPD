@@ -40,8 +40,15 @@ FallbackPcmResampler::Open(AudioFormat &af, unsigned new_sample_rate,
 
 	case SampleFormat::S16:
 	case SampleFormat::FLOAT:
+	case SampleFormat::DOUBLE:
 	case SampleFormat::S24_P32:
 	case SampleFormat::S32:
+#ifdef USE_ALSA_DOP
+	case SampleFormat::DOP64:
+	case SampleFormat::DOP128:
+	case SampleFormat::DOP256:
+	case SampleFormat::DOP512:
+#endif
 		break;
 
 	case SampleFormat::DSD:
@@ -122,6 +129,12 @@ FallbackPcmResampler::Resample(ConstBuffer<void> src, gcc_unused Error &error)
 	case SampleFormat::UNDEFINED:
 	case SampleFormat::S8:
 	case SampleFormat::DSD:
+#ifdef USE_ALSA_DOP
+	case SampleFormat::DOP64:
+	case SampleFormat::DOP128:
+	case SampleFormat::DOP256:
+	case SampleFormat::DOP512:
+#endif
 		assert(false);
 		gcc_unreachable();
 
@@ -133,6 +146,7 @@ FallbackPcmResampler::Resample(ConstBuffer<void> src, gcc_unused Error &error)
 							   out_rate);
 
 	case SampleFormat::FLOAT:
+	case SampleFormat::DOUBLE:
 	case SampleFormat::S24_P32:
 	case SampleFormat::S32:
 		return pcm_resample_fallback_void<int32_t>(buffer,

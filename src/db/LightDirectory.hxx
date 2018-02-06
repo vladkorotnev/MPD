@@ -25,6 +25,7 @@
 #include <string>
 
 #include <time.h>
+#include <limits>
 
 struct Tag;
 
@@ -41,8 +42,13 @@ struct LightDirectory {
 
 	time_t mtime;
 
+	unsigned total;
+
 	constexpr LightDirectory(const char *_uri, time_t _mtime)
-		:uri(_uri), mtime(_mtime) {}
+		:uri(_uri), mtime(_mtime), total(std::numeric_limits<unsigned>::max()) {}
+
+	constexpr LightDirectory(const char *_uri, time_t _mtime, unsigned _total)
+		:uri(_uri), mtime(_mtime), total(_total) {}
 
 	static constexpr LightDirectory Root() {
 		return LightDirectory("", 0);

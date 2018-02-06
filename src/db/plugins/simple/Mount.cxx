@@ -69,7 +69,7 @@ PrefixVisitPlaylist(const char *base, const VisitPlaylist &visit_playlist,
 
 bool
 WalkMount(const char *base, const Database &db,
-	  bool recursive, const SongFilter *filter,
+	  const DatabaseSelection &selection,
 	  const VisitDirectory &visit_directory, const VisitSong &visit_song,
 	  const VisitPlaylist &visit_playlist,
 	  Error &error)
@@ -91,6 +91,6 @@ WalkMount(const char *base, const Database &db,
 		vp = std::bind(PrefixVisitPlaylist,
 			       base, std::ref(visit_playlist), _1, _2, _3);
 
-	return db.Visit(DatabaseSelection("", recursive, filter),
+	return db.Visit(selection,
 			vd, vs, vp, error);
 }

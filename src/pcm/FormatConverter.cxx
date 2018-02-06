@@ -50,6 +50,13 @@ PcmFormatConverter::Open(SampleFormat _src_format, SampleFormat _dest_format,
 	case SampleFormat::S24_P32:
 	case SampleFormat::S32:
 	case SampleFormat::FLOAT:
+	case SampleFormat::DOUBLE:
+#ifdef USE_ALSA_DOP
+	case SampleFormat::DOP64:
+	case SampleFormat::DOP128:
+	case SampleFormat::DOP256:
+	case SampleFormat::DOP512:
+#endif
 		break;
 	}
 
@@ -83,6 +90,12 @@ PcmFormatConverter::Convert(ConstBuffer<void> src, gcc_unused Error &error)
 					 src).ToVoid();
 
 	case SampleFormat::S24_P32:
+#ifdef USE_ALSA_DOP
+	case SampleFormat::DOP64:
+	case SampleFormat::DOP128:
+	case SampleFormat::DOP256:
+	case SampleFormat::DOP512:
+#endif
 		return pcm_convert_to_24(buffer,
 					 src_format,
 					 src).ToVoid();
@@ -93,6 +106,7 @@ PcmFormatConverter::Convert(ConstBuffer<void> src, gcc_unused Error &error)
 					 src).ToVoid();
 
 	case SampleFormat::FLOAT:
+	case SampleFormat::DOUBLE:
 		return pcm_convert_to_float(buffer,
 					    src_format,
 					    src).ToVoid();

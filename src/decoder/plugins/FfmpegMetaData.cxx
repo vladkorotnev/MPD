@@ -26,7 +26,9 @@
 #include "tag/TagHandler.hxx"
 
 extern "C" {
+#include <libavformat/avformat.h>
 #include <libavutil/dict.h>
+#include <libavcodec/avcodec.h>
 }
 
 static constexpr struct tag_table ffmpeg_tags[] = {
@@ -79,4 +81,160 @@ FfmpegScanDictionary(AVDictionary *dict,
 
 	if (handler->pair != nullptr)
 		FfmpegScanPairs(dict, handler, handler_ctx);
+}
+
+static const int MAX_MIMENAME_NUM  = 11;
+static const char *mime_tympename[MAX_MIMENAME_NUM] = {
+	"image/jpeg",
+	"image/png",
+	"image/x-ms-bmp",
+	 "image/jp2",
+	 "image/x-portable-pixmap",
+	 "image/gif",
+	 "image/x-pcx",
+	 "image/x-targa image/x-tga",
+	 "image/tiff",
+	 "image/webp",
+	 "image/x-xwindowdump",
+};
+
+
+enum MimeNameIndex
+{
+	MJPEG,
+	PNG,
+	BMP,
+	JPEG2000,
+	PAM,
+	GIF,
+	PCX,
+	TARGA,
+	TIFF,
+	WEBP,
+	XWD,
+
+};
+
+static const char  *
+get_MIMEDescriptor(enum AVCodecID id)
+{
+	switch(id)
+	{
+		case AV_CODEC_ID_MJPEG:
+			return mime_tympename[MJPEG];
+
+		case AV_CODEC_ID_PNG:
+			return mime_tympename[PNG];
+
+		case AV_CODEC_ID_BMP:
+			return mime_tympename[BMP];
+
+		case AV_CODEC_ID_JPEG2000:
+			return mime_tympename[JPEG2000];
+
+		case AV_CODEC_ID_PAM:
+			return mime_tympename[PAM];
+
+		case AV_CODEC_ID_GIF:
+			return mime_tympename[GIF];
+
+		case AV_CODEC_ID_PCX:
+			return mime_tympename[PCX];
+
+		case AV_CODEC_ID_TARGA:
+			return mime_tympename[TARGA];
+			
+			
+		case AV_CODEC_ID_TIFF:
+			
+			return mime_tympename[TIFF];
+			
+
+		case AV_CODEC_ID_WEBP:
+			
+			return mime_tympename[WEBP];
+			
+
+		case AV_CODEC_ID_XWD:
+			
+			return mime_tympename[XWD];
+			
+
+		
+		default:
+   
+   			return nullptr;
+	
+   	}
+
+  
+ 
+}
+
+
+
+
+static bool
+ffmpeg_copy_cover_paramer(CoverType type, unsigned value,	 
+						 const struct tag_handler *handler, void *handler_ctx)
+{
+	
+	char buf[21];
+
+	if (snprintf(buf, sizeof(buf)-1, "%u", value)) {
+		tag_handler_invoke_cover(handler, handler_ctx, type, (const char*)buf);
+		return true;
+	}
+	return false;
+}
+
+
+void
+FfmpegScanCover(AVFormatContext &format_context,		 
+    const struct tag_handler *handler, void *handler_ctx)
+{
+
+
+	if(handler->cover != nullptr) 
+	{
+		for (unsigned i = 0; i < format_context.nb_streams; ++i)
+		{
+			if(format_context.streams[i]->disposition & AV_DISPOSITION_ATTACHED_PIC)
+			{
+				ffmpeg_copy_cover_paramer(COVER_TYPE, 0,handler, handler_ctx);
+				
+				const char  * mime_types = get_MIMEDescriptor(format_context.streams[i]->codec->codec_id);		
+				if (mime_types != nullptr) {
+			
+					tag_handler_invoke_cover(handler, handler_ctx, COVER_MIME,mime_types);
+			
+				}
+				
+				tag_handler_invoke_cover(handler, handler_ctx, COVER_DESCRIPTION,"");
+				
+				ffmpeg_copy_cover_paramer(COVER_WIDTH, format_context.streams[i]->codec->width, handler, handler_ctx);		
+				ffmpeg_copy_cover_paramer(COVER_HEIGHT, format_context.streams[i]->codec->height, handler, handler_ctx);
+				ffmpeg_copy_cover_paramer(COVER_DEPTH, 0, handler, handler_ctx);
+				ffmpeg_copy_cover_paramer(COVER_COLORS, 0, handler, handler_ctx);
+
+
+				AVPacket pkt = format_context.streams[i]->attached_pic;
+
+				if (pkt.data != nullptr) {
+					ffmpeg_copy_cover_paramer(COVER_LENGTH, pkt.size, handler, handler_ctx);
+					
+					tag_handler_invoke_cover(handler, handler_ctx, COVER_DATA,
+					(const char*)pkt.data, pkt.size);
+				
+				}
+		
+			}
+		
+
+	
+		}
+
+	}
+
+
 }

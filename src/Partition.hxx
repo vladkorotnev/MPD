@@ -27,6 +27,8 @@
 #include "PlayerListener.hxx"
 #include "Chrono.hxx"
 #include "Compiler.h"
+#include "dms/DmsControl.hxx"
+#include "dms/DmsConfig.hxx"
 
 struct Instance;
 class MultipleOutputs;
@@ -45,13 +47,21 @@ struct Partition final : private PlayerListener, private MixerListener {
 
 	PlayerControl pc;
 
+	DmsControl	dc;
+
+	DmsConfig	df;
+
+	Mutex mutex;
+
 	Partition(Instance &_instance,
 		  unsigned max_length,
 		  unsigned buffer_chunks,
 		  unsigned buffered_before_play)
 		:instance(_instance), playlist(max_length),
 		 outputs(*this),
-		 pc(*this, outputs, buffer_chunks, buffered_before_play) {}
+		 pc(*this, *this, outputs, buffer_chunks, buffered_before_play)
+		 ,dc()
+		 {}
 
 	void ClearQueue() {
 		playlist.Clear(pc);
@@ -61,6 +71,13 @@ struct Partition final : private PlayerListener, private MixerListener {
 			   const char *uri_utf8,
 			   Error &error) {
 		return playlist.AppendURI(pc, loader, uri_utf8, error);
+	}
+
+	unsigned AppendURI(const SongLoader &loader,
+			   const char *uri_utf8,
+			   const Tag &tag,
+			   Error &error) {
+		return playlist.AppendURI(pc, loader, uri_utf8, tag, error);
 	}
 
 	PlaylistResult DeletePosition(unsigned position) {

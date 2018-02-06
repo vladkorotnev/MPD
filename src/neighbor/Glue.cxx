@@ -27,6 +27,7 @@
 #include "config/ConfigError.hxx"
 #include "config/Block.hxx"
 #include "util/Error.hxx"
+#include "plugins/SmbclientNeighborPlugin.hxx"
 
 NeighborGlue::Explorer::~Explorer()
 {
@@ -59,35 +60,41 @@ CreateNeighborExplorer(EventLoop &loop, NeighborListener &listener,
 bool
 NeighborGlue::Init(EventLoop &loop, NeighborListener &listener, Error &error)
 {
+	bool ret = false;
 	for (const auto *block = config_get_block(ConfigBlockOption::NEIGHBORS);
 	     block != nullptr; block = block->next) {
 		NeighborExplorer *explorer =
 			CreateNeighborExplorer(loop, listener, *block, error);
 		if (explorer == nullptr) {
 			error.FormatPrefix("Line %i: ", block->line);
-			return false;
+			continue;
+		} else {
+			explorers.emplace_front(explorer);
+			ret = true;
 		}
 
-		explorers.emplace_front(explorer);
 	}
 
-	return true;
+	return ret;
 }
 
 bool
 NeighborGlue::Open(Error &error)
 {
+	bool ret = false;
 	for (auto i = explorers.begin(), end = explorers.end();
 	     i != end; ++i) {
 		if (!i->explorer->Open(error)) {
 			/* roll back */
-			for (auto k = explorers.begin(); k != i; ++k)
+			/*for (auto k = explorers.begin(); k != i; ++k)
 				k->explorer->Close();
-			return false;
+			return false;*/
+			continue;
 		}
+		ret = true;
 	}
 
-	return true;
+	return ret;
 }
 
 void
@@ -95,6 +102,18 @@ NeighborGlue::Close()
 {
 	for (auto i = explorers.begin(), end = explorers.end(); i != end; ++i)
 		i->explorer->Close();
+}
+
+bool
+NeighborGlue::Reopen(Error &error)
+{
+	bool ret = false;
+
+	for (auto i = explorers.begin(), end = explorers.end(); i != end; ++i) {
+		ret |= i->explorer->Reopen(error);
+	}
+	
+	return ret;
 }
 
 NeighborGlue::List
@@ -107,5 +126,29 @@ NeighborGlue::GetList() const
 				    i.explorer->GetList());
 
 	return result;
+}
+
+int
+NeighborGlue::Scanning() const
+{
+	int scanning = 0;
+	for (const auto &i : explorers) {
+		int n = i.explorer->Scanning();
+		if (n > scanning) {
+			scanning = n;
+		}
+	}
+	return scanning;
+}
+
+NeighborExplorer *NeighborGlue::GetSmbclientNeighborExplorer()
+{
+	for (const auto &i : explorers) {
+		std::string plugin_name = i.explorer->GetPluginName();
+		if (plugin_name.compare(smbclient_neighbor_plugin.name) == 0) {
+			return i.explorer;
+		}
+	}
+	return nullptr;
 }
 

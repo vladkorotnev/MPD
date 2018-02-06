@@ -21,6 +21,7 @@
 #define MPD_DATABASE_STATS_HXX
 
 #include "Chrono.hxx"
+#include <string>
 
 struct DatabaseStats {
 	/**

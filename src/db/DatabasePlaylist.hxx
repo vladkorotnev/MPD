@@ -26,12 +26,22 @@ class Database;
 class Storage;
 class SongFilter;
 class Error;
+struct DatabaseSelection;
+class SongLoader;
 
-gcc_nonnull(3,4)
+gcc_nonnull(3)
 bool
 search_add_to_playlist(const Database &db, const Storage &storage,
-		       const char *uri, const char *path_utf8,
-		       const SongFilter *filter,
+		       const char *path_utf8,
+		       const DatabaseSelection &selection,
 		       Error &error);
+
+gcc_nonnull(1,4)
+bool
+playlist_open_into_playlist(const char *uri,
+			 unsigned start_index, unsigned end_index,
+			 const char *dest,
+			 const SongLoader &loader,
+			 Error &error);
 
 #endif

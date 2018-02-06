@@ -160,6 +160,7 @@ roar_use_audio_format(struct roar_audio_info *info,
 	switch (audio_format.format) {
 	case SampleFormat::UNDEFINED:
 	case SampleFormat::FLOAT:
+	case SampleFormat::DOUBLE:
 	case SampleFormat::DSD:
 		info->bits = 16;
 		audio_format.format = SampleFormat::S16;

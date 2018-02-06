@@ -44,6 +44,9 @@
 #include "util/StringUtil.hxx"
 #include "util/UriUtil.hxx"
 #include "util/Error.hxx"
+#include "queue/Queue.hxx"
+#include "Log.hxx"
+#include "util/Domain.hxx"
 
 #include <assert.h>
 #include <sys/stat.h>
@@ -240,8 +243,8 @@ SavePlaylistFile(const PlaylistFileContents &contents, const char *utf8path,
 
 	BufferedOutputStream bos(fos);
 
-	for (const auto &uri_utf8 : contents)
-		playlist_print_uri(bos, uri_utf8.c_str());
+	for (const auto &song : contents)
+		playlist_print_song(bos, song);
 
 	return bos.Flush(error) && fos.Commit(error);
 }
@@ -300,7 +303,8 @@ LoadPlaylistFile(const char *utf8path, Error &error)
 				continue;
 		}
 
-		contents.emplace_back(std::move(uri_utf8));
+		DetachedSong song(uri_utf8);
+		contents.emplace_back(std::move(song));
 		if (contents.size() >= playlist_max_length)
 			break;
 	}
@@ -327,14 +331,18 @@ spl_move_index(const char *utf8path, unsigned src, unsigned dest,
 		return false;
 	}
 
-	const auto src_i = std::next(contents.begin(), src);
-	auto value = std::move(*src_i);
-	contents.erase(src_i);
+	PlaylistFileContents new_contents;
+	for (unsigned i=0;i<contents.size();i++) {
+		if (i == src) {
 
-	const auto dest_i = std::next(contents.begin(), dest);
-	contents.insert(dest_i, std::move(value));
+		} else if (i == dest) {
+			new_contents.push_back(std::move(contents[src]));
+		} else {
+			new_contents.push_back(std::move(contents[i]));
+		}
+	}
 
-	bool result = SavePlaylistFile(contents, utf8path, error);
+	bool result = SavePlaylistFile(new_contents, utf8path, error);
 
 	idle_add(IDLE_STORED_PLAYLIST);
 	return result;
@@ -388,9 +396,15 @@ spl_remove_index(const char *utf8path, unsigned pos, Error &error)
 		return false;
 	}
 
-	contents.erase(std::next(contents.begin(), pos));
+	PlaylistFileContents new_contents;
+	for (unsigned i=0;i<contents.size();i++) {
+		if (i == pos) {
+		} else {
+			new_contents.push_back(std::move(contents[i]));
+		}
+	}
 
-	bool result = SavePlaylistFile(contents, utf8path, error);
+	bool result = SavePlaylistFile(new_contents, utf8path, error);
 
 	idle_add(IDLE_STORED_PLAYLIST);
 	return result;
@@ -438,6 +452,56 @@ spl_append_uri(const char *utf8file,
 	bool success = spl_append_song(utf8file, *song, error);
 	delete song;
 	return success;
+}
+
+bool
+spl_append_queue(const char *utf8path, const Queue &queue,
+	unsigned start, unsigned end, Error &error)
+{
+	PlaylistFileContents contents = LoadPlaylistFile(utf8path, error);
+	const auto path_fs = spl_map_to_fs(utf8path, error);
+	if (path_fs.IsNull())
+		return false;
+
+	AppendFileOutputStream fos(path_fs, error);
+	if (!fos.IsDefined()) {
+		TranslatePlaylistError(error);
+		return false;
+	}
+
+	if (fos.Tell() / (MPD_PATH_MAX + 1) >= playlist_max_length) {
+		error.Set(playlist_domain, int(PlaylistResult::TOO_LARGE),
+			  "Stored playlist is too large");
+		return false;
+	}
+
+	BufferedOutputStream bos(fos);
+
+	unsigned stop = std::min(end, queue.GetLength());
+	for (unsigned i = start; i < stop; i++) {
+		bool found = false;
+		const char *uri_utf8 = playlist_saveAbsolutePaths
+			? queue.Get(i).GetRealURI()
+			: queue.Get(i).GetURI();
+		for (const auto &s : contents) {
+			const char *s_utf8 = (playlist_saveAbsolutePaths || s.HasRealURI())
+			? s.GetRealURI()
+			: s.GetURI();
+			if (strcmp(uri_utf8, s_utf8) == 0) {
+				found = true;
+				break;
+			}
+		}
+		if (found)
+			continue;
+		playlist_print_song(bos, queue.Get(i));
+	}
+
+	if (!bos.Flush(error) || !fos.Commit(error))
+		return false;
+
+	idle_add(IDLE_STORED_PLAYLIST);
+	return true;
 }
 
 static bool

@@ -18,6 +18,7 @@
  */
 
 #include "config.h"
+#include "TagItem.hxx"
 #include "TagId3.hxx"
 #include "TagHandler.hxx"
 #include "TagTable.hxx"
@@ -198,6 +199,167 @@ tag_id3_import_text(struct id3_tag *tag, const char *id, TagType type,
 					  handler, handler_ctx);
 }
 
+
+/*******added by meilinfeng for covers********/
+struct jpegInfo
+{
+	unsigned width;
+	unsigned height;
+
+};
+
+/*get jpeg information*/
+static bool 
+tag_id3_getJpeg_info(id3_byte_t const *pic_data,jpegInfo &jpginfo)
+{
+	short int width = 0,height = 0;
+	while(pic_data++)
+	{
+		if(*pic_data == 0xFF)
+		{
+			pic_data++;
+			if(*pic_data == 0xC0)
+			{
+
+				pic_data += 4;
+				height = (pic_data[0] << 8) |  pic_data[1] ;
+				pic_data += 2;
+				width = (pic_data[0] << 8) |  pic_data[1] ;
+				jpginfo.height = height;
+				jpginfo.width = width;
+				return true;
+				
+			}
+
+		}
+
+	}
+	
+	return false;
+}
+
+
+
+static inline void
+tag_id3_handler_invoke_cover(const struct tag_handler *handler, void *ctx,
+			CoverType type, const char *value, size_t length=0)
+{
+	assert(handler != nullptr);
+	assert((unsigned)type < COVER_NUM_OF_ITEM_TYPES);
+	assert(value != nullptr);
+
+	if (handler->cover != nullptr)
+		handler->cover(type, value, ctx, length);
+}
+
+
+
+static bool
+tag_id3_copy_cover_paramer(CoverType type, unsigned value,	 
+						 const struct tag_handler *handler, void *handler_ctx)
+{
+	
+	char buf[21];
+
+	if (snprintf(buf, sizeof(buf)-1, "%u", value)) {
+		tag_id3_handler_invoke_cover(handler, handler_ctx, type, (const char*)buf);
+		return true;
+	}
+	return false;
+}
+
+
+
+
+/**
+ * Import a "cover frame" (ID3v2.4.0 section 4.2).  
+ */
+static void
+tag_id3_import_cover_frame(const struct id3_frame *frame,
+			  const struct tag_handler *handler, void *handler_ctx)
+{
+
+	const id3_field *field = nullptr;
+
+	if (frame->nfields != 5)
+		return;
+	/* check the encoding field */
+
+	field = id3_frame_field(frame, 0);
+	if (field == nullptr || field->type != ID3_FIELD_TYPE_TEXTENCODING)
+		return;
+	//type
+	tag_id3_copy_cover_paramer(COVER_TYPE, 0,handler, handler_ctx);
+
+	
+	//mime  image/jpeg
+	field = id3_frame_field(frame, 1);
+	if (field != nullptr && field->type == ID3_FIELD_TYPE_LATIN1)
+	{
+		id3_latin1_t const * latin1 = id3_field_getlatin1(field);
+		if (latin1 != nullptr) {
+			tag_handler_invoke_cover(handler, handler_ctx, COVER_MIME,(const char*)latin1);	
+		}
+		
+	}
+
+
+	tag_handler_invoke_cover(handler, handler_ctx, COVER_DESCRIPTION,"");
+	
+	
+
+	field = id3_frame_field(frame, 4);
+	if (field != nullptr && field->type == ID3_FIELD_TYPE_BINARYDATA)
+	{
+		
+		id3_length_t length;
+		
+		id3_byte_t const *binarydata = id3_field_getbinarydata(field,&length);
+		if(binarydata == nullptr)
+			return;
+		
+#if 0 // cause crash in tag_id3_getJpeg_info, when readcover "01-Kalerka.dsf"
+		//fprintf(stderr,"field 4 = %d  length = %ld\n", field->type,length);
+		jpegInfo jpginfo;
+		if (!tag_id3_getJpeg_info(binarydata,jpginfo))
+			return;
+
+		tag_id3_copy_cover_paramer(COVER_WIDTH, jpginfo.width, handler, handler_ctx);		
+		tag_id3_copy_cover_paramer(COVER_HEIGHT, jpginfo.height, handler, handler_ctx);
+		tag_id3_copy_cover_paramer(COVER_DEPTH, 0, handler, handler_ctx);
+		tag_id3_copy_cover_paramer(COVER_COLORS, 0, handler, handler_ctx);
+#endif
+
+		tag_id3_copy_cover_paramer(COVER_LENGTH, length, handler, handler_ctx);
+		tag_handler_invoke_cover(handler, handler_ctx, COVER_DATA,
+			(const char*)binarydata, length);
+
+		
+	}
+
+
+
+}
+
+
+
+/**
+ * Import Attached picture with the specified id (ID3v2.4.0 section
+ * 4.2).  This is a wrapper for tag_id3_import_cover_frame().
+ */
+static void
+tag_id3_import_cover(struct id3_tag *tag, const char *id,
+		    const struct tag_handler *handler, void *handler_ctx)
+{
+	const struct id3_frame *frame;
+	for (unsigned i = 0;
+	     (frame = id3_tag_findframe(tag, id, i)) != nullptr; ++i)
+		tag_id3_import_cover_frame(frame,
+					  handler, handler_ctx);
+}
+
+/***************end ***********************/
+
 /**
  * Import a "Comment frame" (ID3v2.4.0 section 4.10).  It
  * contains 4 fields:
@@ -348,39 +510,51 @@ void
 scan_id3_tag(struct id3_tag *tag,
 	     const struct tag_handler *handler, void *handler_ctx)
 {
-	tag_id3_import_text(tag, ID3_FRAME_ARTIST, TAG_ARTIST,
-			    handler, handler_ctx);
-	tag_id3_import_text(tag, ID3_FRAME_ALBUM_ARTIST,
-			    TAG_ALBUM_ARTIST, handler, handler_ctx);
-	tag_id3_import_text(tag, ID3_FRAME_ARTIST_SORT,
-			    TAG_ARTIST_SORT, handler, handler_ctx);
+	if (handler->tag != nullptr ||
+		handler->duration != nullptr ||
+		handler->pair != nullptr) {
+		tag_id3_import_text(tag, ID3_FRAME_ARTIST, TAG_ARTIST,
+				    handler, handler_ctx);
+		tag_id3_import_text(tag, ID3_FRAME_ALBUM_ARTIST,
+				    TAG_ALBUM_ARTIST, handler, handler_ctx);
+		tag_id3_import_text(tag, ID3_FRAME_ARTIST_SORT,
+				    TAG_ARTIST_SORT, handler, handler_ctx);
 
-	tag_id3_import_text(tag, "TSOA", TAG_ALBUM_SORT, handler, handler_ctx);
+		tag_id3_import_text(tag, "TSOA", TAG_ALBUM_SORT, handler, handler_ctx);
 
-	tag_id3_import_text(tag, ID3_FRAME_ALBUM_ARTIST_SORT,
-			    TAG_ALBUM_ARTIST_SORT, handler, handler_ctx);
-	tag_id3_import_text(tag, ID3_FRAME_TITLE, TAG_TITLE,
-			    handler, handler_ctx);
-	tag_id3_import_text(tag, ID3_FRAME_ALBUM, TAG_ALBUM,
-			    handler, handler_ctx);
-	tag_id3_import_text(tag, ID3_FRAME_TRACK, TAG_TRACK,
-			    handler, handler_ctx);
-	tag_id3_import_text(tag, ID3_FRAME_YEAR, TAG_DATE,
-			    handler, handler_ctx);
-	tag_id3_import_text(tag, ID3_FRAME_GENRE, TAG_GENRE,
-			    handler, handler_ctx);
-	tag_id3_import_text(tag, ID3_FRAME_COMPOSER, TAG_COMPOSER,
-			    handler, handler_ctx);
-	tag_id3_import_text(tag, "TPE3", TAG_PERFORMER,
-			    handler, handler_ctx);
-	tag_id3_import_text(tag, "TPE4", TAG_PERFORMER, handler, handler_ctx);
-	tag_id3_import_comment(tag, ID3_FRAME_COMMENT, TAG_COMMENT,
-			       handler, handler_ctx);
-	tag_id3_import_text(tag, ID3_FRAME_DISC, TAG_DISC,
-			    handler, handler_ctx);
+		tag_id3_import_text(tag, ID3_FRAME_ALBUM_ARTIST_SORT,
+				    TAG_ALBUM_ARTIST_SORT, handler, handler_ctx);
+		tag_id3_import_text(tag, ID3_FRAME_TITLE, TAG_TITLE,
+				    handler, handler_ctx);
+		tag_id3_import_text(tag, ID3_FRAME_ALBUM, TAG_ALBUM,
+				    handler, handler_ctx);
+		tag_id3_import_text(tag, ID3_FRAME_TRACK, TAG_TRACK,
+				    handler, handler_ctx);
+		tag_id3_import_text(tag, ID3_FRAME_YEAR, TAG_DATE,
+				    handler, handler_ctx);
+		tag_id3_import_text(tag, ID3_FRAME_GENRE, TAG_GENRE,
+				    handler, handler_ctx);
+		tag_id3_import_text(tag, ID3_FRAME_COMPOSER, TAG_COMPOSER,
+				    handler, handler_ctx);
+		tag_id3_import_text(tag, "TPE3", TAG_PERFORMER,
+				    handler, handler_ctx);
+		tag_id3_import_text(tag, "TPE4", TAG_PERFORMER, handler, handler_ctx);
+		tag_id3_import_comment(tag, ID3_FRAME_COMMENT, TAG_COMMENT,
+				       handler, handler_ctx);
+		tag_id3_import_text(tag, ID3_FRAME_DISC, TAG_DISC,
+				    handler, handler_ctx);
 
-	tag_id3_import_musicbrainz(tag, handler, handler_ctx);
-	tag_id3_import_ufid(tag, handler, handler_ctx);
+		tag_id3_import_musicbrainz(tag, handler, handler_ctx);
+		tag_id3_import_ufid(tag, handler, handler_ctx);
+	}
+	/*added by meilinfeng for covers*/
+	if (handler->cover != nullptr) {
+		tag_id3_import_cover(tag, "APIC",
+				    handler, handler_ctx);
+	}
+	
+
+	
 }
 
 Tag *

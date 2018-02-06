@@ -41,6 +41,7 @@
 #include "util/Error.hxx"
 #include "util/Domain.hxx"
 #include "Log.hxx"
+#include "Mount.hxx"
 
 #ifdef ENABLE_ZLIB
 #include "fs/io/GzipOutputStream.hxx"
@@ -297,19 +298,33 @@ SimpleDatabase::ReturnSong(gcc_unused const LightSong *song) const
 	assert(song != nullptr);
 	assert(song == &light_song || song == prefixed_light_song);
 
-	delete prefixed_light_song;
-	prefixed_light_song = nullptr;
-
 #ifndef NDEBUG
+	if (song == prefixed_light_song) {
+		db_lock();
+		auto r = root->LookupDirectory(song->GetURI().c_str());
+		if (r.directory->IsMount()) {
+			/* pass the request to the mounted database */
+			db_unlock();
+			if (r.directory->mounted_database) {
+				SimpleDatabase *sd = (SimpleDatabase*)r.directory->mounted_database;
+				assert(sd->borrowed_song_count > 0);
+				sd->borrowed_song_count--;
+			}
+		}
+	}
 	if (song == &light_song) {
 		assert(borrowed_song_count > 0);
 		--borrowed_song_count;
 	}
 #endif
+
+	delete prefixed_light_song;
+	prefixed_light_song = nullptr;
 }
 
 bool
 SimpleDatabase::Visit(const DatabaseSelection &selection,
+		      gcc_unused VisitDirectoryInfo visit_directory_info,
 		      VisitDirectory visit_directory,
 		      VisitSong visit_song,
 		      VisitPlaylist visit_playlist,
@@ -318,6 +333,25 @@ SimpleDatabase::Visit(const DatabaseSelection &selection,
 	ScopeDatabaseLock protect;
 
 	auto r = root->LookupDirectory(selection.uri.c_str());
+	
+	if (r.directory->IsMount()
+		&& r.uri != nullptr) {
+		db_unlock();
+		DatabaseSelection &sel = const_cast<DatabaseSelection&>(selection);
+		sel.uri = r.uri;
+		if (sel.filter != nullptr) {
+			SongFilter *filter = const_cast<SongFilter*>(sel.filter);
+			filter->SetBase(sel.uri);
+		}
+		bool result = WalkMount(r.directory->GetPath(), *(r.directory->mounted_database),
+					sel,
+					visit_directory, visit_song,
+					visit_playlist,
+					error);
+		db_lock();
+		return result;
+	}
+
 	if (r.uri == nullptr) {
 		/* it's a directory */
 
@@ -455,6 +489,8 @@ SimpleDatabase::Mount(const char *uri, Database *db, Error &error)
 
 	Directory *mnt = r.directory->CreateChild(r.uri);
 	mnt->mounted_database = db;
+	mnt->Sort();
+
 	return true;
 }
 
@@ -470,6 +506,19 @@ IsUnsafeChar(char ch)
 	return !IsSafeChar(ch);
 }
 
+static constexpr bool
+IsUnsafeChar2(char ch)
+{
+	return (ch == '<'
+		|| ch == '>'
+		|| ch == '/'
+		|| ch == '\\'
+		|| ch == ':'
+		|| ch == '|'
+		|| ch == '*'
+		|| ch == '?');
+}
+
 bool
 SimpleDatabase::Mount(const char *local_uri, const char *storage_uri,
 		      Error &error)
@@ -481,7 +530,7 @@ SimpleDatabase::Mount(const char *local_uri, const char *storage_uri,
 	}
 
 	std::string name(storage_uri);
-	std::replace_if(name.begin(), name.end(), IsUnsafeChar, '_');
+	std::replace_if(name.begin(), name.end(), IsUnsafeChar2, '_');
 
 	const auto name_fs = AllocatedPath::FromUTF8(name.c_str(), error);
 	if (name_fs.IsNull())

@@ -38,6 +38,8 @@ public:
 	virtual const char *Read() = 0;
 	virtual bool GetInfo(bool follow, StorageFileInfo &info,
 			     Error &error) = 0;
+	virtual void Lock() {}
+	virtual void Unlock() {}
 };
 
 class Storage {

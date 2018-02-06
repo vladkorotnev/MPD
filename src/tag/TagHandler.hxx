@@ -50,6 +50,14 @@ struct tag_handler {
 	 * representation of tags.
 	 */
 	void (*pair)(const char *key, const char *value, void *ctx);
+
+	/**
+	 * A cover has been read.
+	 *
+	 * @param the value of the cover; the pointer will become
+	 * invalid after returning
+	 */
+	void (*cover)(CoverType type, const char *value, void *ctx, size_t length);
 };
 
 static inline void
@@ -84,6 +92,18 @@ tag_handler_invoke_pair(const struct tag_handler *handler, void *ctx,
 
 	if (handler->pair != nullptr)
 		handler->pair(name, value, ctx);
+}
+
+static inline void
+tag_handler_invoke_cover(const struct tag_handler *handler, void *ctx,
+			CoverType type, const char *value, size_t length=0)
+{
+	assert(handler != nullptr);
+	assert((unsigned)type < COVER_NUM_OF_ITEM_TYPES);
+	assert(value != nullptr);
+
+	if (handler->cover != nullptr)
+		handler->cover(type, value, ctx, length);
 }
 
 /**

@@ -38,6 +38,12 @@ CommandResult
 handle_findadd(Client &client, ConstBuffer<const char *> args);
 
 CommandResult
+handle_findaddpl(Client &client, ConstBuffer<const char *> args);
+
+CommandResult
+handle_findsavepl(Client &client, ConstBuffer<const char *> args);
+
+CommandResult
 handle_search(Client &client, ConstBuffer<const char *> args);
 
 CommandResult
@@ -45,6 +51,9 @@ handle_searchadd(Client &client, ConstBuffer<const char *> args);
 
 CommandResult
 handle_searchaddpl(Client &client, ConstBuffer<const char *> args);
+
+CommandResult
+handle_searchsavepl(Client &client, ConstBuffer<const char *> args);
 
 CommandResult
 handle_count(Client &client, ConstBuffer<const char *> args);

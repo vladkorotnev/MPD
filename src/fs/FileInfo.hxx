@@ -80,6 +80,14 @@ public:
 #endif
 	}
 
+	bool IsChar() const {
+#ifdef WIN32
+		return false;
+#else
+		return S_ISCHR(st.st_mode);
+#endif
+	}
+
 	uint64_t GetSize() const {
 #ifdef WIN32
 		return ConstructUint64(data.nFileSizeLow, data.nFileSizeHigh);

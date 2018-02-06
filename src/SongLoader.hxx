@@ -30,6 +30,7 @@ class Database;
 class Storage;
 class DetachedSong;
 class Error;
+struct Tag;
 
 /**
  * A utility class that loads a #DetachedSong object by its URI.  If
@@ -68,6 +69,9 @@ public:
 
 	gcc_nonnull_all
 	DetachedSong *LoadSong(const char *uri_utf8, Error &error) const;
+
+	gcc_nonnull_all
+	DetachedSong *LoadSong(const char *uri_utf8, const Tag &tag, Error &error) const;
 
 private:
 	gcc_nonnull_all

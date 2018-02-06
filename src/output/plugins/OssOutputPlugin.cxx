@@ -428,7 +428,14 @@ sample_format_to_oss(SampleFormat format)
 	switch (format) {
 	case SampleFormat::UNDEFINED:
 	case SampleFormat::FLOAT:
+	case SampleFormat::DOUBLE:
 	case SampleFormat::DSD:
+#ifdef USE_ALSA_DOP
+	case SampleFormat::DOP64:
+	case SampleFormat::DOP128:
+	case SampleFormat::DOP256:
+	case SampleFormat::DOP512:
+#endif
 		return AFMT_QUERY;
 
 	case SampleFormat::S8:

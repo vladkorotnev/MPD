@@ -62,7 +62,10 @@ src_mpd_LDADD = \
 	libutil.a \
 	$(ICU_LDADD) \
 	$(SYSTEMD_DAEMON_LIBS) \
-	$(GLIB_LIBS)
+	$(GLIB_LIBS) \
+	-lossp-uuid \
+	-lboost_system \
+	-lboost_filesystem
 
 src_mpd_SOURCES = \
 	src/Main.cxx src/Main.hxx
@@ -82,6 +85,7 @@ libmpd_a_SOURCES = \
 	src/protocol/Ack.cxx src/protocol/Ack.hxx \
 	src/protocol/ArgParser.cxx src/protocol/ArgParser.hxx \
 	src/protocol/Result.cxx src/protocol/Result.hxx \
+	src/command/Request.hxx \
 	src/command/CommandResult.hxx \
 	src/command/CommandError.cxx src/command/CommandError.hxx \
 	src/command/AllCommands.cxx src/command/AllCommands.hxx \
@@ -122,6 +126,7 @@ libmpd_a_SOURCES = \
 	src/client/ClientMessage.cxx src/client/ClientMessage.hxx \
 	src/client/ClientSubscribe.cxx \
 	src/client/ClientFile.cxx \
+	src/client/Response.cxx src/client/Response.hxx \
 	src/Listen.cxx src/Listen.hxx \
 	src/LogInit.cxx src/LogInit.hxx \
 	src/LogBackend.cxx src/LogBackend.hxx \
@@ -182,6 +187,30 @@ libmpd_a_SOURCES = \
 	src/Chrono.hxx \
 	src/SongFilter.cxx src/SongFilter.hxx \
 	src/PlaylistFile.cxx src/PlaylistFile.hxx
+
+libmpd_a_SOURCES += \
+	src/dms/Sticker.cxx src/dms/Sticker.hxx \
+	src/dms/Action.cxx src/dms/Action.hxx \
+	src/dms/SourceInternal.cxx src/dms/SourceInternal.hxx \
+	src/dms/Poweron.cxx src/dms/Poweron.hxx \
+	src/dms/Context.cxx src/dms/Context.hxx \
+	src/dms/Database.cxx src/dms/Database.hxx \
+	src/dms/Playmode.cxx src/dms/Playmode.hxx \
+	src/dms/util/IOReader.cxx src/dms/util/IOReader.hxx \
+	src/dms/util/IOWriter.cxx src/dms/util/IOWriter.hxx \
+	src/dms/util/IOUtil.cxx src/dms/util/IOUtil.hxx \
+	src/dms/Usb.cxx src/dms/Usb.hxx \
+	src/dms/DmsPlaylistState.cxx src/dms/DmsPlaylistState.hxx \
+	src/dms/DmsQueueFile.cxx src/dms/DmsQueueFile.hxx \
+	src/dms/DmsArgs.cxx src/dms/DmsArgs.hxx \
+	src/dms/DmsConfig.cxx src/dms/DmsConfig.hxx \
+	src/command/DmsCommands.cxx src/command/DmsCommands.hxx \
+	src/dms/DmsStateFile.cxx src/dms/DmsStateFile.hxx \
+	src/dms/DmsControl.cxx src/dms/DmsControl.hxx \
+	src/dms/DmsSourceFile.cxx src/dms/DmsSourceFile.hxx \
+	src/dms/Product.cxx src/dms/DmsProduct.hxx \
+	src/dms/DmsEventMonitor.cxx src/dms/DmsEventMonitor.hxx \
+	src/dms/UsbMonitor.cxx src/dms/UsbMonitor.hxx
 
 if ANDROID
 else
@@ -359,12 +388,15 @@ libmpd_a_SOURCES += \
 	src/sticker/Match.hxx \
 	src/sticker/StickerDatabase.cxx src/sticker/StickerDatabase.hxx \
 	src/sticker/StickerPrint.cxx src/sticker/StickerPrint.hxx \
-	src/sticker/SongSticker.cxx src/sticker/SongSticker.hxx
+	src/sticker/SongSticker.cxx src/sticker/SongSticker.hxx \
+	src/sticker/MiscSticker.cxx src/sticker/MiscSticker.hxx
 endif
 
 # Generic utility library
 
 libutil_a_SOURCES = \
+	src/util/Exception.cxx src/util/Exception.hxx \
+	src/util/RuntimeError.hxx \
 	src/util/Macros.hxx \
 	src/util/Cast.hxx \
 	src/util/Clamp.hxx \
@@ -377,6 +409,7 @@ libutil_a_SOURCES = \
 	src/util/UTF8.cxx src/util/UTF8.hxx \
 	src/util/CharUtil.hxx \
 	src/util/NumberParser.hxx \
+	src/util/AllocatedString.cxx src/util/AllocatedString.hxx \
 	src/util/StringUtil.cxx src/util/StringUtil.hxx \
 	src/util/WStringUtil.cxx src/util/WStringUtil.hxx \
 	src/util/StringAPI.hxx \
@@ -403,7 +436,8 @@ libutil_a_SOURCES = \
 	src/util/OptionDef.hxx \
 	src/util/ByteReverse.cxx src/util/ByteReverse.hxx \
 	src/util/format.c src/util/format.h \
-	src/util/bit_reverse.c src/util/bit_reverse.h
+	src/util/bit_reverse.c src/util/bit_reverse.h \
+	src/util/LineParser.cxx src/util/LineParser.hxx
 
 # Multi-threading library
 
@@ -433,6 +467,7 @@ libnet_a_SOURCES = \
 
 libsystem_a_SOURCES = \
 	src/system/ByteOrder.hxx \
+	src/system/Error.hxx \
 	src/system/FatalError.cxx src/system/FatalError.hxx \
 	src/system/FileDescriptor.cxx src/system/FileDescriptor.hxx \
 	src/system/fd_util.c src/system/fd_util.h \
@@ -515,7 +550,8 @@ libpcm_a_SOURCES = \
 	src/pcm/PcmUtils.hxx
 libpcm_a_CPPFLAGS = $(AM_CPPFLAGS) \
 	$(SOXR_CFLAGS) \
-	$(LIBSAMPLERATE_CFLAGS)
+	$(LIBSAMPLERATE_CFLAGS) \
+	-fopenmp
 
 PCM_LIBS = \
 	libpcm.a \
@@ -819,7 +855,8 @@ libtag_a_SOURCES =\
 	src/tag/MixRamp.cxx src/tag/MixRamp.hxx \
 	src/tag/ApeLoader.cxx src/tag/ApeLoader.hxx \
 	src/tag/ApeReplayGain.cxx src/tag/ApeReplayGain.hxx \
-	src/tag/ApeTag.cxx src/tag/ApeTag.hxx
+	src/tag/ApeTag.cxx src/tag/ApeTag.hxx \
+	src/cover/Cover.cxx src/cover/Cover.hxx
 
 if ENABLE_ID3TAG
 libtag_a_SOURCES += \

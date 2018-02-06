@@ -24,6 +24,8 @@
 
 #include <stdarg.h>
 
+template<typename T> class AllocatedString;
+
 /**
  * Format into a newly allocated string.  The caller frees the return
  * value with delete[].
@@ -39,5 +41,21 @@ FormatNewV(const char *fmt, va_list args);
 gcc_malloc gcc_nonnull(1) gcc_printf(1,2)
 char *
 FormatNew(const char *fmt, ...);
+
+/**
+ * Format into a newly allocated string.  The caller frees the return
+ * value with delete[].
+ */
+gcc_nonnull_all
+AllocatedString<char>
+FormatStringV(const char *fmt, va_list args);
+
+/**
+ * Format into a newly allocated string.  The caller frees the return
+ * value with delete[].
+ */
+gcc_nonnull(1) gcc_printf(1,2)
+AllocatedString<char>
+FormatString(const char *fmt, ...);
 
 #endif

@@ -33,6 +33,10 @@ bool
 audio_check_sample_format(SampleFormat sample_format, Error &error);
 
 bool
+audio_check_sample_rate_and_format(unsigned long sample_rate,
+	SampleFormat sample_format, Error &error);
+
+bool
 audio_check_channel_count(unsigned sample_format, Error &error);
 
 /**
@@ -40,6 +44,11 @@ audio_check_channel_count(unsigned sample_format, Error &error);
  */
 bool
 audio_format_init_checked(AudioFormat &af, unsigned long sample_rate,
+			  SampleFormat sample_format, unsigned channels,
+			  Error &error);
+
+bool
+audio_format_init_checked_full(AudioFormat &af, unsigned long sample_rate,
 			  SampleFormat sample_format, unsigned channels,
 			  Error &error);
 

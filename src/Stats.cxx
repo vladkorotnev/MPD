@@ -26,9 +26,21 @@
 #include "db/Selection.hxx"
 #include "db/Interface.hxx"
 #include "db/Stats.hxx"
+#include "db/DatabaseLock.hxx"
+#include "db/plugins/upnp/UpnpDatabasePlugin.hxx"
+#include "db/plugins/simple/SimpleDatabasePlugin.hxx"
+#include "db/plugins/simple/Directory.hxx"
 #include "util/Error.hxx"
 #include "system/Clock.hxx"
 #include "Log.hxx"
+#ifdef ENABLE_DATABASE
+#include "db/update/Service.hxx"
+#define COMMAND_STATUS_UPDATING_DB	"updating_db"
+#endif
+#include "util/Domain.hxx"
+#include "Log.hxx"
+
+static constexpr Domain stats_domain("main");
 
 #ifndef WIN32
 /**
@@ -66,7 +78,7 @@ stats_invalidate()
 }
 
 static bool
-stats_update(const Database &db)
+stats_update(const Database &db, const DatabaseSelection &selection)
 {
 	switch (stats_validity) {
 	case StatsValidity::INVALID:
@@ -80,13 +92,12 @@ stats_update(const Database &db)
 	}
 
 	Error error;
-
-	const DatabaseSelection selection("", true);
 	if (db.GetStats(selection, stats, error)) {
 		stats_validity = StatsValidity::VALID;
 		return true;
 	} else {
-		LogError(error);
+		//LogError(error);
+		FormatDefault(stats_domain, "%s %d get stats fail! %s", __func__, __LINE__, error.GetMessage());
 
 		stats_validity = StatsValidity::FAILED;
 		return false;
@@ -94,10 +105,35 @@ stats_update(const Database &db)
 }
 
 static void
-db_stats_print(Client &client, const Database &db)
+db_stats_print(Client &client)
 {
-	if (!stats_update(db))
-		return;
+	DmsConfig	&df = client.partition.df;
+	DmsSource &source = df.source;
+    Error error;
+	const Database *db = client.GetDatabase(error);
+	if  (db == nullptr) {
+	      return;
+	}
+	
+#ifdef ENABLE_DATABASE
+	const UpdateService *update_service = client.partition.instance.update;
+	unsigned updateJobId = update_service != nullptr
+		? update_service->GetId()
+		: 0;
+	if (updateJobId != 0) {
+		stats_validity = StatsValidity::INVALID;
+		client_printf(client,
+				  COMMAND_STATUS_UPDATING_DB ": %i\n",
+				  updateJobId);
+	}
+#endif
+	const char *uri = source.isUpnp() ? source.getName().c_str() : "";
+	bool ignore_repeat = source.isUpnp() ? true : false;
+	const DatabaseSelection selection(uri, true, ignore_repeat);
+	if (!stats_update(*db, selection)) {
+		FormatDefault(stats_domain, "%s %d get stats fail!", __func__, __LINE__);
+		//return;
+	}
 
 	unsigned total_duration_s =
 		std::chrono::duration_cast<std::chrono::seconds>(stats.total_duration).count();
@@ -112,7 +148,26 @@ db_stats_print(Client &client, const Database &db)
 		      stats.song_count,
 		      total_duration_s);
 
-	const time_t update_stamp = db.GetUpdateStamp();
+	time_t update_stamp = 0;
+	std::list<std::string> list;
+	Storage *_composite = client.partition.instance.storage;
+	if (db->IsPlugin(simple_db_plugin) &&
+		getAllMounts(_composite, list)) {
+		SimpleDatabase *db2 = static_cast<SimpleDatabase*>(client.partition.instance.database);
+		for (const auto &str : list) {
+			db_lock();
+			const auto lr = db2->GetRoot().LookupDirectory(str.c_str());
+			db_unlock();
+			if (lr.directory->IsMount()) {
+				Database &_db2 = *(lr.directory->mounted_database);
+				time_t t = _db2.GetUpdateStamp();
+				update_stamp = t > update_stamp ? t : update_stamp;
+			}
+		}
+	} else if (db->IsPlugin(upnp_db_plugin)) {
+		update_stamp = db->GetUpdateStamp();
+	}
+
 	if (update_stamp > 0)
 		client_printf(client,
 			      "db_update: %lu\n",
@@ -134,9 +189,13 @@ stats_print(Client &client)
 #endif
 		      (unsigned long)(client.player_control.GetTotalPlayTime() + 0.5));
 
+	DmsConfig	&df = client.partition.df;
+	if (!df.source.isUsb() &&
+		!df.source.isNetwork()) {
+		return;
+	}
+
 #ifdef ENABLE_DATABASE
-	const Database *db = client.partition.instance.database;
-	if (db != nullptr)
-		db_stats_print(client, *db);
+	    db_stats_print(client);
 #endif
 }

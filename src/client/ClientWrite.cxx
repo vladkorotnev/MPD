@@ -26,7 +26,7 @@
 /**
  * Write a block of data to the client.
  */
-static void
+void
 client_write(Client &client, const char *data, size_t length)
 {
 	/* if the client is going to be closed, do nothing */
@@ -34,6 +34,19 @@ client_write(Client &client, const char *data, size_t length)
 		return;
 
 	client.Write(data, length);
+}
+
+bool
+Client::Write(const void *data, size_t length)
+{
+	/* if the client is going to be closed, do nothing */
+	return !IsExpired() && FullyBufferedSocket::Write(data, length);
+}
+
+bool
+Client::Write(const char *data)
+{
+	return Write(data, strlen(data));
 }
 
 void

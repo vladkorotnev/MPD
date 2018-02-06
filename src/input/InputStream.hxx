@@ -44,6 +44,11 @@ private:
 	 */
 	std::string uri;
 
+	/**
+	 * The real URI which was used to open this stream. Maybe changed by time.
+	 */
+	std::string real_uri;
+
 public:
 	/**
 	 * A mutex that protects the mutable attributes of this object
@@ -143,6 +148,20 @@ public:
 	 */
 	const char *GetURI() const {
 		return uri.c_str();
+	}
+
+	gcc_pure
+	bool HasRealURI() const {
+		return !real_uri.empty();
+	}
+
+	const char *GetRealURI() const {
+		return real_uri.empty() ? uri.c_str() : real_uri.c_str();
+	}
+
+	template<typename T>
+	void SetRealURI(T &&_uri) {
+		real_uri = std::forward<T>(_uri);
 	}
 
 	void Lock() {

@@ -30,6 +30,7 @@
 
 struct TagItem;
 struct Tag;
+template<typename T> struct ConstBuffer;
 
 /**
  * A class that constructs #Tag objects.
@@ -88,6 +89,8 @@ public:
 	}
 
 	void Clear();
+
+	bool Parse(ConstBuffer<const char *> args);
 
 	/**
 	 * Move this object to the given #Tag instance.  This object

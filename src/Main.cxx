@@ -25,6 +25,14 @@
 #include "PlaylistGlobal.hxx"
 #include "MusicChunk.hxx"
 #include "StateFile.hxx"
+#include "dms/DmsStateFile.hxx"
+#include "dms/DmsQueueFile.hxx"
+#include "command/DmsCommands.hxx"
+#include "net/SocketAddress.hxx"
+#include "dms/DmsSourceFile.hxx"
+#include "dms/Product.hxx"
+#include "dms/Context.hxx"
+#include "dms/DmsEventMonitor.hxx"
 #include "PlayerThread.hxx"
 #include "Mapper.hxx"
 #include "Permission.hxx"
@@ -126,6 +134,9 @@
 #endif
 
 #include <limits.h>
+#include <sys/types.h>
+#include <sys/wait.h>
+#include <errno.h>
 
 static constexpr unsigned DEFAULT_BUFFER_SIZE = 4096;
 static constexpr unsigned DEFAULT_BUFFER_BEFORE_PLAY = 10;
@@ -138,7 +149,10 @@ Context *context;
 
 Instance *instance;
 
-static StateFile *state_file;
+StateFile *state_file;
+DmsStateFile *dms_state_file;
+DmsQueueFile *dms_queue_file;
+//DmsEvent dms_event;
 
 #ifdef ENABLE_DAEMON
 
@@ -227,9 +241,6 @@ glue_db_init_and_load(void)
 				   "because the database does not need it");
 	}
 
-	if (!instance->database->Open(error))
-		FatalError(error);
-
 	if (!instance->database->IsPlugin(simple_db_plugin))
 		return true;
 
@@ -237,6 +248,16 @@ glue_db_init_and_load(void)
 	instance->update = new UpdateService(*instance->event_loop, db,
 					     static_cast<CompositeStorage &>(*instance->storage),
 					     *instance);
+
+	instance->upnpdatabase = CreateUpnpDatabase(*instance->event_loop, *instance,
+					 error);
+	
+	if  (instance->upnpdatabase == nullptr)  {
+	     if  (error.IsDefined()) {
+		 //FatalError(error);
+		 	FormatDefault(main_domain, "upbp database create fail!");
+		 }
+	 }
 
 	/* run database update after daemonization? */
 	return db.FileExists();
@@ -301,6 +322,46 @@ glue_state_file_init(Error &error)
 	return true;
 }
 
+static bool
+glue_dms_state_file_init(Error &error)
+{
+	AllocatedPath path_fs = AllocatedPath::FromUTF8("/data/mpd/dms_state", error);
+
+ 	const unsigned interval = 30;
+
+	dms_state_file = new DmsStateFile(std::move(path_fs), interval,
+				   *instance->partition,
+				   *instance->event_loop);
+	dms_state_file->Read();
+	return true;
+}
+static bool
+glue_dms_queue_file_init(Error &error)
+{
+	AllocatedPath path_fs = AllocatedPath::FromUTF8("/data/mpd/queue/state", error);
+
+ 	const unsigned interval = 30;
+
+	unsigned long mpd_run_cnt = 0;
+	if (DmsControl::readMpdRunCnt(mpd_run_cnt) && !mpd_run_cnt) {
+#ifdef CLEAN_ALL_QUEUE_WHEN_POWEROFF
+		DmsControl::deleteAllQueueFile();
+#else
+		void(0);
+#endif
+	}
+	FormatDefault(main_domain,"MPD run count: %lu", mpd_run_cnt);
+	mpd_run_cnt++;
+	DmsControl::writeMpdRunCnt(mpd_run_cnt);
+	
+	dms_queue_file = new DmsQueueFile(std::move(path_fs), interval,
+				   *instance->partition,
+				   *instance->event_loop);
+	//dms_queue_file->Read();
+	instance->partition->dc.setDmsQueueFile(dms_queue_file);
+	return true;
+}
+
 /**
  * Windows-only initialization of the Winsock2 library.
  */
@@ -345,7 +406,7 @@ initialize_decoder_and_player(void)
 
 	const unsigned buffered_chunks = buffer_size / CHUNK_SIZE;
 
-	if (buffered_chunks >= 1 << 15)
+	if (buffered_chunks >= 1 << 20)
 		FormatFatalError("buffer size \"%lu\" is too big",
 				 (unsigned long)buffer_size);
 
@@ -392,6 +453,15 @@ idle_event_emitted(void)
 	if (flags & (IDLE_PLAYLIST|IDLE_PLAYER|IDLE_MIXER|IDLE_OUTPUT) &&
 	    state_file != nullptr)
 		state_file->CheckModified();
+
+	if (flags & (IDLE_MIXER | IDLE_DMS_SOURCE | IDLE_DMS_VOLUME | IDLE_DMS_SRC | IDLE_DMS_TUBE) &&
+		dms_state_file != nullptr) {
+		dms_state_file->CheckModified();
+	}
+	if (flags & (IDLE_PLAYLIST | IDLE_PLAYER) &&
+		dms_queue_file != nullptr) {
+		dms_queue_file->CheckModified();
+	}
 }
 
 #ifdef WIN32
@@ -491,6 +561,7 @@ int mpd_main(int argc, char *argv[])
 		LogError(error);
 		return EXIT_FAILURE;
 	}
+	DmsProductInit();
 
 	instance = new Instance();
 	instance->event_loop = new EventLoop();
@@ -514,6 +585,7 @@ int mpd_main(int argc, char *argv[])
 
 	initialize_decoder_and_player();
 
+	instance->dc = new Dms::Context(*instance);
 	if (!listen_global_init(*instance->event_loop, *instance->partition,
 				error)) {
 		LogError(error);
@@ -562,6 +634,9 @@ static int mpd_main_after_fork(struct options options)
 		return EXIT_FAILURE;
 	}
 
+
+	dms_source_file_restore();
+
 	initPermissions();
 	playlist_global_init();
 	spl_global_init();
@@ -581,6 +656,12 @@ static int mpd_main_after_fork(struct options options)
 #endif
 
 	glue_sticker_init();
+
+	/* ordered by: load -> acquire -> apply */
+	instance->dc->init();
+	instance->dc->load();
+	instance->dc->acquire();
+	instance->dc->apply();
 
 	command_init();
 	initAudioConfig();
@@ -619,6 +700,9 @@ static int mpd_main_after_fork(struct options options)
 	StartPlayerThread(instance->partition->pc);
 
 #ifdef ENABLE_DATABASE
+	if (instance->database  != nullptr && !instance->database->Open(error)) {
+		FatalError(error);
+	}
 	if (create_db) {
 		/* the database failed to load: recreate the
 		   database */
@@ -629,6 +713,15 @@ static int mpd_main_after_fork(struct options options)
 #endif
 
 	if (!glue_state_file_init(error)) {
+		LogError(error);
+		return EXIT_FAILURE;
+	}
+
+	if (!glue_dms_state_file_init(error)) {
+		LogError(error);
+		return EXIT_FAILURE;
+	}
+	if (!glue_dms_queue_file_init(error)) {
 		LogError(error);
 		return EXIT_FAILURE;
 	}
@@ -664,14 +757,18 @@ static int mpd_main_after_fork(struct options options)
 
 	/* the MPD frontend does not care about timer slack; set it to
 	   a huge value to allow the kernel to reduce CPU wakeups */
-	SetThreadTimerSlackMS(100);
+	SetThreadTimerSlackMS(1);
 
 #ifdef ENABLE_SYSTEMD_DAEMON
 	sd_notify(0, "READY=1");
 #endif
 
+	DmsEventMonitorInitialize(*instance->event_loop);
+	FormatDefault(main_domain, "==start mpd==");
 	/* run the main loop */
 	instance->event_loop->Run();
+	FormatDefault(main_domain, "==close mpd now==");
+	DmsEventMonitorDeinitialize();
 
 #ifdef WIN32
 	win32_app_stopping();
@@ -689,6 +786,15 @@ static int mpd_main_after_fork(struct options options)
 	if (state_file != nullptr) {
 		state_file->Write();
 		delete state_file;
+	}
+
+	if (dms_state_file != nullptr) {
+		dms_state_file->Write();
+		delete dms_state_file;
+	}
+	if (dms_queue_file != nullptr) {
+		dms_queue_file->Write();
+		delete dms_queue_file;
 	}
 
 	instance->partition->pc.Kill();
@@ -709,6 +815,13 @@ static int mpd_main_after_fork(struct options options)
 	if (instance->database != nullptr) {
 		instance->database->Close();
 		delete instance->database;
+		instance->database = nullptr;
+	}
+
+	if (instance->upnpdatabase  != nullptr) {
+	    instance->upnpdatabase->Close();
+            delete instance->upnpdatabase;		  
+            instance->upnpdatabase = nullptr;
 	}
 
 	delete instance->storage;
@@ -741,6 +854,9 @@ static int mpd_main_after_fork(struct options options)
 	SignalHandlersFinish();
 #endif
 	delete instance->event_loop;
+	delete instance->dc;
+	instance->dc = nullptr;
+
 	delete instance;
 	instance = nullptr;
 
@@ -751,6 +867,7 @@ static int mpd_main_after_fork(struct options options)
 #ifdef WIN32
 	WSACleanup();
 #endif
+	FormatDefault(main_domain, "==close done==");
 
 	IcuFinish();
 

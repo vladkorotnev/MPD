@@ -40,7 +40,11 @@
 #include "util/ConstBuffer.hxx"
 #include "util/Error.hxx"
 #include "util/Domain.hxx"
+#include "util/UriUtil.hxx"
+#include "util/StringUtil.hxx"
 #include "LogV.hxx"
+#include "src/decoder/DecoderInternal.hxx"
+#include "MusicChunk.hxx"
 
 extern "C" {
 #include <libavcodec/avcodec.h>
@@ -162,6 +166,59 @@ copy_interleave_frame(const AVCodecContext &codec_context,
 	return { output_buffer, (size_t)data_size };
 }
 
+static ConstBuffer<void>
+start_gapless_filter(ConstBuffer<void> buffer)
+{
+	unsigned none_zero_cnt = 0;
+	auto buf = ConstBuffer<uint8_t>::FromVoid(buffer);
+	
+	for (unsigned i=0;i<buf.size;i++) {
+		if (buf.data[i] == 0x00) {
+			if (none_zero_cnt) {
+				none_zero_cnt--;
+			}
+		} else {
+			if (++none_zero_cnt >= (CHUNK_SIZE/4)) {
+				unsigned chunk = (i+CHUNK_SIZE-1)/CHUNK_SIZE;
+				unsigned size = chunk * CHUNK_SIZE;
+				if (size > buf.size) {
+					size = buf.size;
+				}
+				buf.data += size;
+				buf.size -= size;
+				break;
+			}
+		}
+	}
+
+	return buf.ToVoid();
+}
+
+static ConstBuffer<void>
+end_gapless_filter(ConstBuffer<void> buffer)
+{
+	unsigned zero_cnt = 0;
+	auto buf = ConstBuffer<uint8_t>::FromVoid(buffer);
+	
+	for (unsigned i=0;i<buf.size;i++) {
+		if (buf.data[i] != 0x00) {
+			if (zero_cnt) {
+				zero_cnt--;
+			}
+		} else {
+			if (++zero_cnt >= (CHUNK_SIZE/4)) {
+				unsigned chunk = i/CHUNK_SIZE;
+				unsigned size = chunk * CHUNK_SIZE;
+				buf.size = size;
+				break;
+			}
+		}
+	}
+
+
+	return buf.ToVoid();
+}
+
 /**
  * Decode an #AVPacket and send the resulting PCM data to the decoder
  * API.
@@ -172,7 +229,9 @@ ffmpeg_send_packet(Decoder &decoder, InputStream &is,
 		   AVCodecContext &codec_context,
 		   const AVStream &stream,
 		   AVFrame &frame,
-		   FfmpegBuffer &buffer)
+		   FfmpegBuffer &buffer,
+		   bool &enable_gapless_start,
+		   bool &enable_gapless_end)
 {
 	if (packet.pts >= 0 && packet.pts != (int64_t)AV_NOPTS_VALUE) {
 		auto start = start_time_fallback(stream);
@@ -210,6 +269,26 @@ ffmpeg_send_packet(Decoder &decoder, InputStream &is,
 			   e.g. OOM */
 			LogError(error);
 			return DecoderCommand::STOP;
+		}
+		if (enable_gapless_start && packet.pts <= 500) {
+			size_t size = output_buffer.size;
+			output_buffer = start_gapless_filter(output_buffer);
+			if (size != output_buffer.size) {
+				enable_gapless_start = false;
+				FormatDefault(ffmpeg_domain, "start gap size=%d total size=%d",
+					size-output_buffer.size, size);
+			}
+		} else if (enable_gapless_end) {
+			int64_t duration = av_rescale_q(stream.duration, stream.time_base,(AVRational){1, 1000});
+			if ((packet.pts + 500) >= duration) {
+				size_t size = output_buffer.size;
+				output_buffer = end_gapless_filter(output_buffer);
+				if (size != output_buffer.size) {
+					enable_gapless_end = false;
+					FormatDefault(ffmpeg_domain, "end gap size=%d total size=%d",
+						size-output_buffer.size, size);
+				}
+			}
 		}
 
 		cmd = decoder_data(decoder, is,
@@ -287,7 +366,7 @@ ffmpeg_probe(Decoder *decoder, InputStream &is)
 	/* this attribute was added in libav/ffmpeg version 11, but
 	   unfortunately it's "uint8_t" instead of "char", and it's
 	   not "const" - wtf? */
-	avpd.mime_type = (uint8_t *)const_cast<char *>(is.GetMimeType());
+	avpd.mime_type = (char *)const_cast<char *>(is.GetMimeType());
 #else
 	/* API problem fixed in FFmpeg 2.5 */
 	avpd.mime_type = is.GetMimeType();
@@ -405,6 +484,8 @@ static void
 FfmpegDecode(Decoder &decoder, InputStream &input,
 	     AVFormatContext &format_context)
 {
+	bool enable_gapless_start = false;
+	bool enable_gapless_end = false;
 	const int find_result =
 		avformat_find_stream_info(&format_context, nullptr);
 	if (find_result < 0) {
@@ -433,6 +514,18 @@ FfmpegDecode(Decoder &decoder, InputStream &input,
 		FormatDebug(ffmpeg_domain, "codec '%s'",
 			    codec_context.codec_name);
 #endif
+	switch (codec_context.codec_id) {
+	case AV_CODEC_ID_WMAV1:
+	case AV_CODEC_ID_WMAV2:
+	case AV_CODEC_ID_MP3:
+	case AV_CODEC_ID_WMALOSSLESS:
+	case AV_CODEC_ID_ALAC:
+		enable_gapless_start = enable_gapless_end = true;
+		break;
+	default:
+		enable_gapless_start = enable_gapless_end = false;
+		break;
+	}
 
 	AVCodec *codec = avcodec_find_decoder(codec_context.codec_id);
 
@@ -475,6 +568,16 @@ FfmpegDecode(Decoder &decoder, InputStream &input,
 	decoder_initialized(decoder, audio_format,
 			    input.IsSeekable(), total_time);
 
+	TagBuilder tag;
+	if (input.HasRealURI()) {
+		UriSuffixBuffer suffix_buffer;
+		const char *const suffix = uri_get_suffix(input.GetRealURI(), suffix_buffer);
+		if (suffix != nullptr) {
+			tag.AddItem(TAG_SUFFIX, suffix);
+			decoder_tag(decoder, input, tag.Commit());
+		}
+	}
+
 	FfmpegParseMetaData(decoder, format_context, audio_stream);
 
 #if LIBAVUTIL_VERSION_MAJOR >= 53
@@ -505,7 +608,9 @@ FfmpegDecode(Decoder &decoder, InputStream &input,
 						 packet, codec_context,
 						 av_stream,
 						 *frame,
-						 interleaved_buffer);
+						 interleaved_buffer,
+						 enable_gapless_start,
+						 enable_gapless_end);
 		else
 			cmd = decoder_get_command(decoder);
 
@@ -578,6 +683,24 @@ FfmpegScanStream(AVFormatContext &format_context,
 	if (audio_stream < 0)
 		return false;
 
+	AVStream &av_stream = *format_context.streams[audio_stream];
+
+	AVCodecContext &codec_context = *av_stream.codec;
+
+	const SampleFormat sample_format =
+		ffmpeg_sample_format(codec_context.sample_fmt);
+	if (sample_format == SampleFormat::UNDEFINED) {
+		// (error message already done by ffmpeg_sample_format())
+		return false;
+	}
+
+	Error error;
+	AudioFormat audio_format;
+	if (!audio_check_sample_rate_and_format(codec_context.sample_rate, sample_format, error)) {
+		FormatDefault(ffmpeg_domain, "%s\n", error.GetMessage());
+		return false;
+	}
+
 	const AVStream &stream = *format_context.streams[audio_stream];
 	if (stream.duration != (int64_t)AV_NOPTS_VALUE)
 		tag_handler_invoke_duration(&handler, handler_ctx,
@@ -585,6 +708,7 @@ FfmpegScanStream(AVFormatContext &format_context,
 							   stream.time_base));
 
 	FfmpegScanMetadata(format_context, audio_stream, handler, handler_ctx);
+	FfmpegScanCover(format_context,&handler,handler_ctx);
 
 	return true;
 }
@@ -691,7 +815,7 @@ static const char *const ffmpeg_mime_types[] = {
 	"audio/x-pn-realaudio",
 	"audio/x-pn-multirate-realaudio",
 	"audio/x-speex",
-	"audio/x-tta"
+	"audio/x-tta",
 	"audio/x-voc",
 	"audio/x-wav",
 	"audio/x-wma",

@@ -40,7 +40,12 @@ client_process_command_list(Client &client, bool list_ok,
 		char *cmd = &*i.begin();
 
 		FormatDebug(client_domain, "process command \"%s\"", cmd);
+		time_t t1 = time(nullptr);
 		ret = command_process(client, num++, cmd);
+		time_t t2 = time(nullptr);
+		if (t1 != -1 && t2 != -1 && (t2-t1 >= 5)) {
+			FormatDefault(client_domain, "command_process(\"%s\") too long(%ld)", cmd, t2-t1);
+		}
 		FormatDebug(client_domain, "command returned %i", int(ret));
 		if (ret != CommandResult::OK || client.IsExpired())
 			break;
@@ -123,7 +128,12 @@ client_process_line(Client &client, char *line)
 			FormatDebug(client_domain,
 				    "[%u] process command \"%s\"",
 				    client.num, line);
+			time_t t1 = time(nullptr);
 			ret = command_process(client, 0, line);
+			time_t t2 = time(nullptr);
+			if (t1 != -1 && t2 != -1 && (t2-t1 >= 5)) {
+				FormatDefault(client_domain, "command_process(\"%s\") too long(%ld)", line, t2-t1);
+			}
 			FormatDebug(client_domain,
 				    "[%u] command returned %i",
 				    client.num, int(ret));

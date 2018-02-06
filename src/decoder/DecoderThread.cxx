@@ -235,10 +235,16 @@ decoder_run_stream_plugin(Decoder &decoder, InputStream &is,
 
 static bool
 decoder_run_stream_locked(Decoder &decoder, InputStream &is,
-			  const char *uri, bool &tried_r)
+			  gcc_unused const char *uri, bool &tried_r)
 {
-	UriSuffixBuffer suffix_buffer;
-	const char *const suffix = uri_get_suffix(uri, suffix_buffer);
+	const char *suffix = nullptr;
+	if (decoder.song_tag != nullptr) {
+		suffix = decoder.song_tag->GetValue(TAG_SUFFIX);
+	}
+	if (suffix == nullptr) {
+		UriSuffixBuffer suffix_buffer;
+		suffix = uri_get_suffix(is.GetRealURI(), suffix_buffer);
+	}
 
 	using namespace std::placeholders;
 	const auto f = std::bind(decoder_run_stream_plugin,

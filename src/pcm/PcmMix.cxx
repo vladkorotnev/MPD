@@ -93,6 +93,12 @@ pcm_add_vol(PcmDither &dither, void *buffer1, const void *buffer2, size_t size,
 	switch (format) {
 	case SampleFormat::UNDEFINED:
 	case SampleFormat::DSD:
+#ifdef USE_ALSA_DOP
+	case SampleFormat::DOP64:
+	case SampleFormat::DOP128:
+	case SampleFormat::DOP256:
+	case SampleFormat::DOP512:
+#endif
 		/* not implemented */
 		return false;
 
@@ -121,6 +127,7 @@ pcm_add_vol(PcmDither &dither, void *buffer1, const void *buffer2, size_t size,
 		return true;
 
 	case SampleFormat::FLOAT:
+	case SampleFormat::DOUBLE:
 		pcm_add_vol_float((float *)buffer1, (const float *)buffer2,
 				  size / 4,
 				  pcm_volume_to_float(vol1),
@@ -181,6 +188,12 @@ pcm_add(void *buffer1, const void *buffer2, size_t size,
 	switch (format) {
 	case SampleFormat::UNDEFINED:
 	case SampleFormat::DSD:
+#ifdef USE_ALSA_DOP
+	case SampleFormat::DOP64:
+	case SampleFormat::DOP128:
+	case SampleFormat::DOP256:
+	case SampleFormat::DOP512:
+#endif
 		/* not implemented */
 		return false;
 
@@ -201,6 +214,7 @@ pcm_add(void *buffer1, const void *buffer2, size_t size,
 		return true;
 
 	case SampleFormat::FLOAT:
+	case SampleFormat::DOUBLE:
 		pcm_add_float((float *)buffer1, (const float *)buffer2,
 			      size / 4);
 		return true;

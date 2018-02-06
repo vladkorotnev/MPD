@@ -42,6 +42,11 @@ struct Tag {
 	SignedSongTime duration;
 
 	/**
+	 * The time stamp of curr, in seconds.
+	 */
+	double curr_time;
+
+	/**
 	 * Does this file have an embedded playlist (e.g. embedded CUE
 	 * sheet)?
 	 */
@@ -79,6 +84,7 @@ struct Tag {
 
 	Tag &operator=(Tag &&other) {
 		duration = other.duration;
+		curr_time = other.curr_time;
 		has_playlist = other.has_playlist;
 		std::swap(items, other.items);
 		std::swap(num_items, other.num_items);
@@ -97,7 +103,7 @@ struct Tag {
 	 * Returns true if the tag contains any information.
 	 */
 	bool IsDefined() const {
-		return !IsEmpty() || !duration.IsNegative();
+		return !IsEmpty() || !duration.IsNegative() || curr_time>=0;
 	}
 
 	/**

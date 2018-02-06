@@ -25,7 +25,12 @@
 #include "protocol/Result.hxx"
 #include "neighbor/Glue.hxx"
 #include "neighbor/Info.hxx"
+#include "neighbor/Explorer.hxx"
 #include "util/ConstBuffer.hxx"
+#include "util/StringUtil.hxx"
+#include "dms/DmsConfig.hxx"
+#include "dms/Context.hxx"
+#include "db/Interface.hxx"
 
 #include <set>
 #include <string>
@@ -43,17 +48,78 @@ handle_listneighbors(Client &client, gcc_unused ConstBuffer<const char *> args)
 {
 	const NeighborGlue *const neighbors =
 		client.partition.instance.neighbors;
+	DmsConfig	&df = client.partition.df;
+	bool	pcshare = df.pcshare.toBool();
+	bool	mediaserver = df.mediaserver.toBool();
+	
 	if (neighbors == nullptr) {
 		command_error(client, ACK_ERROR_UNKNOWN,
 			      "No neighbor plugin configured");
 		return CommandResult::ERROR;
 	}
 
-	for (const auto &i : neighbors->GetList())
+	for (const auto &i : neighbors->GetList()) {
+		if (StringStartsWith(i.uri.c_str(), "smb://") && !pcshare) {
+			continue;
+		} else if (StringStartsWith(i.uri.c_str(), "upnp://") && !mediaserver) {
+			continue;
+		}
 		client_printf(client,
 			      "neighbor: %s\n"
-			      "name: %s\n",
+			      "name: %s\n",			    
 			      i.uri.c_str(),
-			      i.display_name.c_str());
+			      i.display_name.c_str()
+			     );
+		if  (!i.device_icon_url.empty())  {
+			client_printf(client,
+			          "icon_url: %s\n",
+				  i.device_icon_url.c_str());
+		}
+	}
 	return CommandResult::OK;
 }
+
+CommandResult
+handle_scanNeighbors(Client &client, gcc_unused ConstBuffer<const char *> args)
+{
+	DmsConfig &df = client.partition.df;
+	DmsSource &source = df.source;
+	Error error;
+	Database *upnpdatabase = client.partition.instance.upnpdatabase;
+	NeighborGlue *neighbors =
+		client.partition.instance.neighbors;
+	if (source.isNetwork() ||
+		!client.context.poweron.isRunning()) {
+		return CommandResult::OK;
+	}
+	if (neighbors == nullptr) {
+		command_error(client, ACK_ERROR_UNKNOWN,
+			      "No neighbor plugin configured");
+		return CommandResult::ERROR;
+	}
+
+	auto state = client.player_control.GetState();
+	if (state == PlayerState::PLAY) {
+		client.player_control.Pause();
+	}
+
+	if (upnpdatabase != nullptr) {
+		upnpdatabase->Close();
+	}
+
+	if (!neighbors->Reopen(error)) {
+		command_error(client, ACK_ERROR_SYSTEM,
+			      "scan neighbor fail!");
+		return CommandResult::ERROR;
+	}
+	if (upnpdatabase != nullptr
+		&& !upnpdatabase->Open(error)) {
+		command_error(client, ACK_ERROR_SYSTEM,
+				  "open upnp error:%s",
+				  error.GetMessage());
+		return CommandResult::ERROR;
+	}
+
+	return CommandResult::OK;
+}
+

@@ -87,12 +87,12 @@ DoConvert(GIConv conv, const char *src)
 	char buffer[4096];
 	char *in = const_cast<char *>(src);
 	char *out = buffer;
-	size_t in_left = strlen(src);
-	size_t out_left = sizeof(buffer);
+	gsize in_left = strlen(src);
+	gsize out_left = sizeof(buffer);
 
-	size_t n = g_iconv(conv, &in, &in_left, &out, &out_left);
+	gsize n = g_iconv(conv, &in, &in_left, &out, &out_left);
 
-	if (n == static_cast<size_t>(-1) || in_left > 0)
+	if (n == static_cast<gsize>(-1) || in_left > 0)
 		return std::string();
 
 	return std::string(buffer, sizeof(buffer) - out_left);

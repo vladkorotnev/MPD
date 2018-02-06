@@ -28,8 +28,9 @@ class SongLoader;
 class PlaylistVector;
 class Error;
 class AllocatedPath;
+struct Queue;
 
-typedef std::vector<std::string> PlaylistFileContents;
+typedef std::vector<DetachedSong> PlaylistFileContents;
 
 extern bool playlist_saveAbsolutePaths;
 
@@ -82,6 +83,9 @@ bool
 spl_append_uri(const char *path_utf8,
 	       const SongLoader &loader, const char *uri_utf8,
 	       Error &error);
+bool
+spl_append_queue(const char *utf8path, const Queue &queue,
+	unsigned start, unsigned end, Error &error);
 
 bool
 spl_rename(const char *utf8from, const char *utf8to, Error &error);

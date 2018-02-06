@@ -143,12 +143,12 @@ spl_print(Client &client, const char *name_utf8, bool detail,
 	if (contents.empty() && error.IsDefined())
 		return false;
 
-	for (const auto &uri_utf8 : contents) {
+	for (const auto &s : contents) {
 #ifdef ENABLE_DATABASE
-		if (!detail || !PrintSongDetails(client, uri_utf8.c_str()))
+		if (!detail || !PrintSongDetails(client, s.GetURI()))
 #endif
 			client_printf(client, SONG_FILE "%s\n",
-				      uri_utf8.c_str());
+				      s.GetURI());
 	}
 
 	return true;

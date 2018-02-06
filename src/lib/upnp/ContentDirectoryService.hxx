@@ -55,6 +55,8 @@ class ContentDirectoryService {
 	std::string m_friendlyName;
 	std::string m_manufacturer;
 	std::string m_modelName;
+	std::string m_deviceIconUrl;
+	std::string m_URLBase;
 
 	int m_rdreqcnt; // Slice size to use when reading
 
@@ -127,9 +129,24 @@ public:
 		return "upnp://" + m_deviceId + "/" + m_serviceType;
 	}
 
+	gcc_pure
+	std::string GetDeviceId() const {
+		return m_deviceId;
+	}
+
+	gcc_pure
+	std::string GetURLBase() const {
+		return m_URLBase;
+	}
+
 	/** Retrieve the "friendly name" for this server, useful for display. */
 	const char *getFriendlyName() const {
 		return m_friendlyName.c_str();
+	}
+	
+	/**Return upnp server LOGO icon url*/
+	const char *getDeviceIconUrl() const {
+		return m_deviceIconUrl.c_str();
 	}
 };
 

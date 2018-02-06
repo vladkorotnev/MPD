@@ -19,9 +19,12 @@
 
 #include "config.h"
 #include "TagFile.hxx"
+#include "tag/TagType.h"
+#include "tag/TagHandler.hxx"
 #include "fs/Path.hxx"
 #include "util/UriUtil.hxx"
 #include "util/Error.hxx"
+#include "util/StringUtil.hxx"
 #include "decoder/DecoderList.hxx"
 #include "decoder/DecoderPlugin.hxx"
 #include "input/InputStream.hxx"
@@ -92,6 +95,11 @@ tag_file_scan(Path path_fs, const tag_handler &handler, void *handler_ctx)
 		return false;
 
 	const auto suffix_utf8 = Path::FromFS(suffix).ToUTF8();
+	if (suffix != nullptr) {
+		char name[64];
+		ToUpperASCII(name, suffix_utf8.c_str(), sizeof(name));
+		tag_handler_invoke_tag(&handler, handler_ctx, TAG_SUFFIX, name);
+	}
 
 	TagFileScan tfs(path_fs, suffix_utf8.c_str(), handler, handler_ctx);
 	return decoder_plugins_try([&](const DecoderPlugin &plugin){

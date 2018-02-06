@@ -25,8 +25,26 @@
 #include "Interface.hxx"
 #include "DetachedSong.hxx"
 #include "storage/StorageInterface.hxx"
+#include "db/Selection.hxx"
+#include "fs/io/BufferedOutputStream.hxx"
+#include "fs/io/FileOutputStream.hxx"
+#include "util/Error.hxx"
+#include "playlist/SongEnumerator.hxx"
+#include "playlist/PlaylistSong.hxx"
+#include "playlist/PlaylistAny.hxx"
+#include "PlaylistSave.hxx"
+#include "PlaylistFile.hxx"
+#include "thread/Mutex.hxx"
+#include "thread/Cond.hxx"
+#include "util/StringUtil.hxx"
+#include "PlaylistError.hxx"
+#include "fs/FileSystem.hxx"
 
 #include <functional>
+
+#ifdef ENABLE_DATABASE
+#include "SongLoader.hxx"
+#endif
 
 static bool
 AddSong(const Storage &storage, const char *playlist_path_utf8,
@@ -39,14 +57,90 @@ AddSong(const Storage &storage, const char *playlist_path_utf8,
 
 bool
 search_add_to_playlist(const Database &db, const Storage &storage,
-		       const char *uri, const char *playlist_path_utf8,
-		       const SongFilter *filter,
+		       const char *playlist_path_utf8,
+		       const DatabaseSelection &selection,
 		       Error &error)
 {
-	const DatabaseSelection selection(uri, true, filter);
-
 	using namespace std::placeholders;
 	const auto f = std::bind(AddSong, std::ref(storage),
 				 playlist_path_utf8, _1, _2);
 	return db.Visit(selection, f, error);
 }
+
+static bool
+playlist_load_into_playlist(const char *uri, SongEnumerator &e,
+			 unsigned start_index, unsigned end_index,
+			 const char *dest,
+			 const SongLoader &loader,
+			 Error &error, BufferedOutputStream *bos)
+{
+	const std::string base_uri = uri != nullptr
+		? PathTraitsUTF8::GetParent(uri)
+		: std::string(".");
+
+	DetachedSong *song;
+	for (unsigned i = 0;
+	     i < end_index && (song = e.NextSong()) != nullptr;
+	     ++i) {
+		if (i < start_index) {
+			/* skip songs before the start index */
+			delete song;
+			continue;
+		}
+
+		if (!playlist_check_translate_song(*song, base_uri.c_str(),
+						   loader)) {
+			delete song;
+			continue;
+		}
+
+		if (bos != nullptr) {
+			playlist_print_song(*bos, *song);
+		}
+		bool ret = spl_append_song(dest,std::move(*song), error);
+		delete song;
+		if (!ret)
+			return ret;
+	}
+
+	return true;
+}
+
+bool
+playlist_open_into_playlist(const char *uri,
+			 unsigned start_index, unsigned end_index,
+			 const char *dest,
+			 const SongLoader &loader,
+			 Error &error)
+{
+	Mutex mutex;
+	Cond cond;
+	FileOutputStream *fos = nullptr;
+	BufferedOutputStream *bos = nullptr;
+	std::string new_uri = uri;
+
+	auto playlist = playlist_open_any(uri,
+#ifdef ENABLE_DATABASE
+					  loader.GetStorage(),
+#endif
+					  mutex, cond);
+	if (playlist == nullptr) {
+		error.Set(playlist_domain, int(PlaylistResult::NO_SUCH_LIST),
+			  "No such playlist");
+		return false;
+	}
+
+	bool result =
+		playlist_load_into_playlist(uri, *playlist,
+					 start_index, end_index,
+					 dest, loader, error, bos);
+	delete playlist;
+	if (bos!=nullptr && bos->Flush(error) && fos!= nullptr && fos->Commit(error)) {
+		const auto path_fs = spl_map_to_fs(uri, error);
+		const auto new_path_fs = spl_map_to_fs(new_uri.c_str(), error);
+		RemoveFile(path_fs);
+		RenameFile(new_path_fs, path_fs);
+	}
+	return result;
+}
+

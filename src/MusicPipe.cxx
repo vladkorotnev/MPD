@@ -55,6 +55,7 @@ MusicPipe::Shift()
 			assert(tail_r == &chunk->next);
 
 			tail_r = &head;
+			//tail = head;
 		} else {
 			assert(size > 0);
 			assert(tail_r != &chunk->next);
@@ -99,8 +100,28 @@ MusicPipe::Push(MusicChunk *chunk)
 #endif
 
 	chunk->next = nullptr;
-	*tail_r = chunk;
+	tail = *tail_r = chunk;
 	tail_r = &chunk->next;
+	if (chunk->length > 0) {
+		bufferd_time = chunk->time;
+	}
 
 	++size;
 }
+
+SignedSongTime
+MusicPipe::GetTailSongTime() const
+{
+	if (tail == nullptr) {
+		return SignedSongTime::FromS(0);
+	} else if (!tail->time.IsPositive() && size>1) {
+		MusicChunk *ttail = head;
+		for (unsigned i=0;i<size-1 && ttail != nullptr;i++) {
+			ttail = ttail->next;
+		}
+		return ttail == nullptr ? SignedSongTime::FromS(0) : ttail->time;
+	} else {
+		return tail->time;
+	}
+}
+

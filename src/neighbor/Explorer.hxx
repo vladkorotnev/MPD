@@ -21,6 +21,7 @@
 #define MPD_NEIGHBOR_EXPLORER_HXX
 
 #include <forward_list>
+#include <string>
 
 class Error;
 class NeighborListener;
@@ -41,11 +42,15 @@ class NeighborExplorer {
 protected:
 	NeighborListener &listener;
 
-	explicit NeighborExplorer(NeighborListener &_listener)
-		:listener(_listener) {}
+	explicit NeighborExplorer(NeighborListener &_listener, const char *_name)
+		:listener(_listener), scanning(0), plugin_name(_name) {}
 
 public:
 	typedef std::forward_list<NeighborInfo> List;
+
+	int scanning;
+
+	std::string plugin_name;
 
 	/**
 	 * Free instance data.
@@ -63,9 +68,18 @@ public:
 	virtual void Close() = 0;
 
 	/**
+         * Start exploring the neighborhood.
+	 */
+	virtual bool Reopen(Error &error) { Close(); return Open(error);}
+
+	/**
 	 * Obtain a list of currently known neighbors.
 	 */
 	virtual List GetList() const = 0;
+
+	inline int Scanning() {return scanning;}
+
+	inline std::string GetPluginName() {return plugin_name;}
 };
 
 #endif

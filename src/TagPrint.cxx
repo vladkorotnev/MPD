@@ -22,6 +22,7 @@
 #include "tag/Tag.hxx"
 #include "tag/TagSettings.h"
 #include "client/Client.hxx"
+#include "util/StringUtil.hxx"
 
 void tag_print_types(Client &client)
 {
@@ -37,15 +38,27 @@ void tag_print_types(Client &client)
 void
 tag_print(Client &client, TagType type, const char *value)
 {
-	client_printf(client, "%s: %s\n", tag_item_names[type], value);
+	if (type == TAG_SUFFIX) {
+		char s[64];
+		ToUpperASCII(s, value, sizeof(s));
+		client_printf(client, "%s: %s\n", tag_item_names[type], s);
+	} else {
+		client_printf(client, "%s: %s\n", tag_item_names[type], value);
+	}
 }
 
 void
 tag_print_values(Client &client, const Tag &tag)
 {
-	for (const auto &i : tag)
-		client_printf(client, "%s: %s\n",
-			      tag_item_names[i.type], i.value);
+	for (const auto &i : tag) {
+		if (i.type == TAG_SUFFIX) {
+			char s[64];
+			ToUpperASCII(s, i.value, sizeof(s));
+			client_printf(client, "%s: %s\n", tag_item_names[i.type], s);
+		} else {
+			client_printf(client, "%s: %s\n", tag_item_names[i.type], i.value);
+		}
+	}
 }
 
 void tag_print(Client &client, const Tag &tag)

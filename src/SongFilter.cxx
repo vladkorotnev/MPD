@@ -22,6 +22,7 @@
 #include "db/LightSong.hxx"
 #include "DetachedSong.hxx"
 #include "tag/Tag.hxx"
+#include "tag/TagBuilder.hxx"
 #include "util/ConstBuffer.hxx"
 #include "util/ASCII.hxx"
 #include "util/UriUtil.hxx"
@@ -74,6 +75,12 @@ SongFilter::Item::Item(unsigned _tag, time_t _time)
 {
 }
 
+void
+SongFilter::Item::SetValue(std::string str)
+{
+	value = str;
+}
+
 bool
 SongFilter::Item::StringMatch(const char *s) const
 {
@@ -111,15 +118,6 @@ SongFilter::Item::Match(const Tag &_tag) const
 	}
 
 	if (tag < TAG_NUM_OF_ITEM_TYPES && !visited_types[tag]) {
-		/* If the search critieron was not visited during the
-		   sweep through the song's tag, it means this field
-		   is absent from the tag or empty. Thus, if the
-		   searched string is also empty
-		   then it's a match as well and we should return
-		   true. */
-		if (value.empty())
-			return true;
-
 		if (tag == TAG_ALBUM_ARTIST && visited_types[TAG_ARTIST]) {
 			/* if we're looking for "album artist", but
 			   only "artist" exists, use that */
@@ -127,10 +125,33 @@ SongFilter::Item::Match(const Tag &_tag) const
 				if (item.type == TAG_ARTIST &&
 				    StringMatch(item.value))
 					return true;
+		} else {
+			/* If the search critieron was not visited during the
+			   sweep through the song's tag, it means this field
+			   is absent from the tag or empty. Thus, if the
+			   searched string is also empty
+			   then it's a match as well and we should return
+			   true. */
+			if (value.empty())
+				return true;
 		}
 	}
 
 	return false;
+}
+
+static std::string
+get_parent(std::string str)
+{
+	auto p1 = str.rfind('/');
+	if (p1 == std::string::npos) {
+		return std::string("Folder");
+	}
+
+	auto p2 = str.rfind('/', p1-1);
+	p2 = p2 == std::string::npos ? 0 : p2+1;
+
+	return str.substr(p2, p1-p2);
 }
 
 bool
@@ -145,7 +166,26 @@ SongFilter::Item::Match(const DetachedSong &song) const
 	if (tag == LOCATE_TAG_FILE_TYPE)
 		return StringMatch(song.GetURI());
 
-	return Match(song.GetTag());
+	if (!Match(song.GetTag())) {
+		auto &t = song.GetTag();
+		if (!t.HasType(TAG_ALBUM) && !t.HasType(TAG_ALBUM_SORT) &&
+			(tag == TAG_ALBUM ||
+			tag == TAG_ALBUM_SORT)) {
+		 	// fall back to folder name
+		 	auto str = get_parent(song.GetURI());
+			if (StringMatch(str.c_str())) {
+				DetachedSong &s = const_cast<DetachedSong&>(song);
+				TagBuilder tb(s.GetTag());
+				tb.AddItem((TagType)tag, str.c_str());
+				s.SetTag(tb.Commit());
+				return true;
+			}
+		}
+	} else {
+		return true;
+	}
+
+	return false;
 }
 
 bool
@@ -164,7 +204,26 @@ SongFilter::Item::Match(const LightSong &song) const
 		return StringMatch(uri.c_str());
 	}
 
-	return Match(*song.tag);
+	if (!Match(*song.tag)) {
+		if (!song.tag->HasType(TAG_ALBUM) && !song.tag->HasType(TAG_ALBUM_SORT) &&
+			(tag == TAG_ALBUM ||
+			tag == TAG_ALBUM_SORT)) {
+		 	// fall back to folder name
+		 	auto str = get_parent(song.GetURI());
+			if (StringMatch(str.c_str())) {
+				LightSong &s = const_cast<LightSong&>(song);
+				TagBuilder tb(*s.tag);
+				tb.AddItem((TagType)tag, str.c_str());
+				Tag &t = const_cast<Tag&>(*s.tag);
+				tb.Commit(t);
+				return true;
+			}
+		}
+	} else {
+		return true;
+	}
+
+	return false;
 }
 
 SongFilter::SongFilter(unsigned tag, const char *value, bool fold_case)
@@ -308,4 +367,15 @@ SongFilter::GetBase() const
 			return i.GetValue();
 
 	return std::string();
+}
+
+void
+SongFilter::SetBase(std::string str)
+{
+	for (auto &i : items)
+		if (i.GetTag() == LOCATE_TAG_BASE_TYPE) {
+			return i.SetValue(str);
+		}
+
+	items.push_back(Item(LOCATE_TAG_BASE_TYPE, str.c_str(), false));
 }

@@ -151,11 +151,13 @@ print_storage_uri(Client &client, const Storage &storage)
 	if (PathTraitsUTF8::IsAbsolute(uri.c_str())) {
 		/* storage points to local directory */
 
+#if 0 //ndef ENABLE_MOUNT_LOCAL
 		if (!client.IsLocal())
 			/* only "local" clients may see local paths
 			   (same policy as with the "config"
 			   command) */
 			return;
+#endif
 	} else {
 		/* hide username/passwords from client */
 
@@ -180,8 +182,10 @@ handle_listmounts(Client &client, gcc_unused ConstBuffer<const char *> args)
 
 	const auto visitor = [&client](const char *mount_uri,
 				       const Storage &storage){
-		client_printf(client, "mount: %s\n", mount_uri);
-		print_storage_uri(client, storage);
+		if (*mount_uri != '\0') {
+			client_printf(client, "mount: %s\n", mount_uri);
+			print_storage_uri(client, storage);
+		}
 	};
 
 	composite.VisitMounts(visitor);

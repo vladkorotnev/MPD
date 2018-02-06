@@ -31,6 +31,7 @@
 #include "ReplayGainInfo.hxx"
 #include "util/ASCII.hxx"
 #include "util/DivideString.hxx"
+#include <stdio.h>
 
 bool
 flac_parse_replay_gain(ReplayGainInfo &rgi,
@@ -41,10 +42,12 @@ flac_parse_replay_gain(ReplayGainInfo &rgi,
 	bool found = false;
 
 	const auto *comments = vc.comments;
-	for (FLAC__uint32 i = 0, n = vc.num_comments; i < n; ++i)
-		if (ParseReplayGainVorbis(rgi,
-					  (const char *)comments[i].entry))
+	for (FLAC__uint32 i = 0, n = vc.num_comments; i < n; ++i) {
+		const char *entry = (const char *)comments[i].entry;
+		if (entry != nullptr && ParseReplayGainVorbis(rgi,
+					  entry))
 			found = true;
+	}
 
 	return found;
 }
@@ -55,9 +58,13 @@ flac_parse_mixramp(const FLAC__StreamMetadata_VorbisComment &vc)
 	MixRampInfo mix_ramp;
 
 	const auto *comments = vc.comments;
-	for (FLAC__uint32 i = 0, n = vc.num_comments; i < n; ++i)
-		ParseMixRampVorbis(mix_ramp,
-				   (const char *)comments[i].entry);
+	for (FLAC__uint32 i = 0, n = vc.num_comments; i < n; ++i) {
+		const char *entry = (const char *)comments[i].entry;
+		if (entry != nullptr) {
+			ParseMixRampVorbis(mix_ramp,
+					   entry);
+		}
+	}
 
 	return mix_ramp;
 }
@@ -95,8 +102,11 @@ static void
 flac_scan_comment(const FLAC__StreamMetadata_VorbisComment_Entry *entry,
 		  const struct tag_handler *handler, void *handler_ctx)
 {
+	const char *comment = (const char *)entry->entry;
+	if (comment == nullptr) {
+		return;
+	}
 	if (handler->pair != nullptr) {
-		const char *comment = (const char *)entry->entry;
 		const DivideString split(comment, '=');
 		if (split.IsDefined() && !split.IsEmpty())
 			tag_handler_invoke_pair(handler, handler_ctx,
@@ -125,6 +135,45 @@ flac_scan_comments(const FLAC__StreamMetadata_VorbisComment *comment,
 				  handler, handler_ctx);
 }
 
+static bool
+flac_copy_cover_paramer(CoverType type, FLAC__uint32 value,
+		  const struct tag_handler *handler, void *handler_ctx)
+{
+	char buf[21];
+
+	if (snprintf(buf, sizeof(buf)-1, "%u", value)) {
+		tag_handler_invoke_cover(handler, handler_ctx, type, (const char*)buf);
+		return true;
+	}
+	return false;
+}
+
+static void
+flac_scan_picture(const FLAC__StreamMetadata_Picture *picture,
+		   const struct tag_handler *handler, void *handler_ctx)
+{
+	flac_copy_cover_paramer(COVER_TYPE, (FLAC__uint32)picture->type,
+		handler, handler_ctx);
+	if (picture->mime_type != nullptr) {
+		tag_handler_invoke_cover(handler, handler_ctx, COVER_MIME,
+			(const char*)picture->mime_type);
+	}
+	if (picture->description != nullptr) {
+		tag_handler_invoke_cover(handler, handler_ctx, COVER_DESCRIPTION,
+			(const char*)picture->description);
+	}
+	flac_copy_cover_paramer(COVER_WIDTH, picture->width, handler, handler_ctx);
+	flac_copy_cover_paramer(COVER_HEIGHT, picture->height, handler, handler_ctx);
+	flac_copy_cover_paramer(COVER_DEPTH, picture->depth, handler, handler_ctx);
+	flac_copy_cover_paramer(COVER_COLORS, picture->colors, handler, handler_ctx);
+	flac_copy_cover_paramer(COVER_LENGTH, picture->data_length, handler, handler_ctx);
+	if (picture->data != nullptr) {
+		tag_handler_invoke_cover(handler, handler_ctx, COVER_DATA,
+			(const char*)picture->data, picture->data_length);
+	}
+	
+}
+
 gcc_pure
 static inline SongTime
 flac_duration(const FLAC__StreamMetadata_StreamInfo *stream_info)
@@ -149,6 +198,11 @@ flac_scan_metadata(const FLAC__StreamMetadata *block,
 		if (block->data.stream_info.sample_rate > 0)
 			tag_handler_invoke_duration(handler, handler_ctx,
 						    flac_duration(&block->data.stream_info));
+		break;
+		
+	case FLAC__METADATA_TYPE_PICTURE:
+		flac_scan_picture(&block->data.picture,
+				   handler, handler_ctx);
 		break;
 
 	default:

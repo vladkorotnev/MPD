@@ -105,6 +105,10 @@ gcc_printf(2,3)
 void
 FormatError(const Domain &domain, const char *fmt, ...);
 
+gcc_printf(2,3)
+void
+FormatError(const Domain &domain, const char *fmt, ...);
+
 void
 LogError(const Error &error);
 

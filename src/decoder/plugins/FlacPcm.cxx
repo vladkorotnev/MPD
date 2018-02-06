@@ -92,6 +92,12 @@ flac_convert(void *dest,
 
 	case SampleFormat::S24_P32:
 	case SampleFormat::S32:
+#ifdef USE_ALSA_DOP
+	case SampleFormat::DOP64:
+	case SampleFormat::DOP128:
+	case SampleFormat::DOP256:
+	case SampleFormat::DOP512:
+#endif
 		flac_convert_32((int32_t*)dest, num_channels, buf,
 				position, end);
 		break;
@@ -102,6 +108,7 @@ flac_convert(void *dest,
 		break;
 
 	case SampleFormat::FLOAT:
+	case SampleFormat::DOUBLE:
 	case SampleFormat::DSD:
 	case SampleFormat::UNDEFINED:
 		assert(false);

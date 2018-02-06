@@ -26,6 +26,12 @@
 #include <algorithm>
 
 #include <assert.h>
+#include "Log.hxx"
+#include "util/Domain.hxx"
+#include <sys/time.h>
+#include <omp.h>
+
+static constexpr Domain pcm_dsd_domain("dsd");
 
 PcmDsd::PcmDsd()
 {
@@ -68,7 +74,10 @@ PcmDsd::ToFloat(unsigned channels, ConstBuffer<uint8_t> src)
 			if (dsd2pcm[c] == nullptr)
 				return nullptr;
 		}
-
+	}
+	unsigned c;
+#pragma omp parallel for
+	for (c = 0; c < channels; ++c) {
 		dsd2pcm_translate(dsd2pcm[c], num_frames,
 				  src.data + c, channels,
 				  false, dest + c, channels);

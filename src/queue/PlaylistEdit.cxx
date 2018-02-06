@@ -32,6 +32,7 @@
 #include "DetachedSong.hxx"
 #include "SongLoader.hxx"
 #include "Idle.hxx"
+#include "tag/Tag.hxx"
 
 #include <stdlib.h>
 
@@ -129,6 +130,22 @@ playlist::AppendURI(PlayerControl &pc, const SongLoader &loader,
 		    Error &error)
 {
 	DetachedSong *song = loader.LoadSong(uri, error);
+	if (song == nullptr)
+		return 0;
+
+	unsigned result = AppendSong(pc, std::move(*song), error);
+	delete song;
+
+	return result;
+}
+
+unsigned
+playlist::AppendURI(PlayerControl &pc, const SongLoader &loader,
+		    const char *uri,
+		    const Tag &tag,
+		    Error &error)
+{
+	DetachedSong *song = loader.LoadSong(uri, tag, error);
 	if (song == nullptr)
 		return 0;
 

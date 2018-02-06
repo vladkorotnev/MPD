@@ -20,10 +20,13 @@
 #ifndef MPD_AUDIO_FORMAT_HXX
 #define MPD_AUDIO_FORMAT_HXX
 
+#define USE_ALSA_DOP
+
 #include "Compiler.h"
 
 #include <stdint.h>
 #include <assert.h>
+#include <alsa/asoundlib.h>
 
 #if defined(WIN32) && GCC_CHECK_VERSION(4,6)
 /* on WIN32, "FLOAT" is already defined, and this triggers -Wshadow */
@@ -51,11 +54,25 @@ enum class SampleFormat : uint8_t {
 	 */
 	FLOAT,
 
+	/*
+	 * 64 bit double. just use to show now
+	 */
+	DOUBLE,
+
 	/**
 	 * Direct Stream Digital.  1-bit samples; each frame has one
 	 * byte (8 samples) per channel.
 	 */
 	DSD,
+#ifdef USE_ALSA_DOP
+	/**
+	 * DSD Over Pcm.
+	 */
+	DOP64,
+	DOP128,
+	DOP256,
+	DOP512,
+#endif
 };
 
 #if defined(WIN32) && GCC_CHECK_VERSION(4,6)
@@ -75,11 +92,15 @@ struct AudioFormat {
 	 */
 	uint32_t sample_rate;
 
+	uint32_t sample_rate2;
+
 	/**
 	 * The format samples are stored in.  See the #sample_format
 	 * enum for valid values.
 	 */
 	SampleFormat format;
+
+	SampleFormat format2;
 
 	/**
 	 * The number of channels.  Only mono (1) and stereo (2) are
@@ -91,8 +112,8 @@ struct AudioFormat {
 
 	constexpr AudioFormat(uint32_t _sample_rate,
 			      SampleFormat _format, uint8_t _channels)
-		:sample_rate(_sample_rate),
-		 format(_format), channels(_channels) {}
+		:sample_rate(_sample_rate), sample_rate2(0),
+		 format(_format), format2(SampleFormat::UNDEFINED), channels(_channels) {}
 
 	static constexpr AudioFormat Undefined() {
 		return AudioFormat(0, SampleFormat::UNDEFINED,0);
@@ -104,7 +125,9 @@ struct AudioFormat {
 	 */
 	void Clear() {
 		sample_rate = 0;
+		sample_rate2 = 0;
 		format = SampleFormat::UNDEFINED;
+		format2 = SampleFormat::UNDEFINED;
 		channels = 0;
 	}
 
@@ -131,6 +154,21 @@ struct AudioFormat {
 	constexpr bool IsMaskDefined() const {
 		return sample_rate != 0 || format != SampleFormat::UNDEFINED ||
 			channels != 0;
+	}
+
+	constexpr bool IsDSD() const {
+		return format == SampleFormat::DSD;
+	}
+
+	constexpr bool IsDoP() const {
+		return format == SampleFormat::DOP64
+			|| format == SampleFormat::DOP128
+			|| format == SampleFormat::DOP256
+			|| format == SampleFormat::DOP512;
+	}
+
+	constexpr bool IsDSDOrDoP() const {
+		return IsDSD() || IsDoP();
 	}
 
 	bool IsValid() const;
@@ -183,6 +221,12 @@ audio_valid_sample_rate(unsigned sample_rate)
 	return sample_rate > 0 && sample_rate < (1 << 30);
 }
 
+static constexpr inline bool
+audio_valid_pcm_sample_rate(unsigned sample_rate)
+{
+	return sample_rate > 0 && sample_rate <= 768000;
+}
+
 /**
  * Checks whether the sample format is valid.
  */
@@ -195,8 +239,45 @@ audio_valid_sample_format(SampleFormat format)
 	case SampleFormat::S24_P32:
 	case SampleFormat::S32:
 	case SampleFormat::FLOAT:
+	case SampleFormat::DOUBLE:
 	case SampleFormat::DSD:
+#ifdef USE_ALSA_DOP
+	case SampleFormat::DOP64:
+	case SampleFormat::DOP128:
+	case SampleFormat::DOP256:
+	case SampleFormat::DOP512:
+#endif
 		return true;
+
+	case SampleFormat::UNDEFINED:
+		break;
+	}
+
+	return false;
+}
+
+/**
+ * Checks whether the sample format is valid.
+ */
+static inline bool
+audio_valid_sample_rate_and_format(unsigned sample_rate, SampleFormat format)
+{
+	switch (format) {
+	case SampleFormat::S8:
+	case SampleFormat::S16:
+	case SampleFormat::S24_P32:
+	case SampleFormat::S32:
+	case SampleFormat::FLOAT:
+	case SampleFormat::DOUBLE:
+		return audio_valid_pcm_sample_rate(sample_rate);
+	case SampleFormat::DSD:
+#ifdef USE_ALSA_DOP
+	case SampleFormat::DOP64:
+	case SampleFormat::DOP128:
+	case SampleFormat::DOP256:
+	case SampleFormat::DOP512:
+#endif
+		return audio_valid_sample_rate(sample_rate);
 
 	case SampleFormat::UNDEFINED:
 		break;
@@ -254,6 +335,13 @@ sample_format_size(SampleFormat format)
 	case SampleFormat::S24_P32:
 	case SampleFormat::S32:
 	case SampleFormat::FLOAT:
+	case SampleFormat::DOUBLE:
+#ifdef USE_ALSA_DOP
+	case SampleFormat::DOP64:
+	case SampleFormat::DOP128:
+	case SampleFormat::DOP256:
+	case SampleFormat::DOP512:
+#endif
 		return 4;
 
 	case SampleFormat::DSD:
@@ -309,5 +397,13 @@ gcc_pure gcc_malloc
 const char *
 audio_format_to_string(AudioFormat af,
 		       struct audio_format_string *s);
+
+/**
+ * Convert MPD's #SampleFormat enum to libasound's snd_pcm_format_t
+ * enum.  Returns SND_PCM_FORMAT_UNKNOWN if there is no according ALSA
+ * PCM format.
+ */
+snd_pcm_format_t
+get_bitformat(SampleFormat sample_format);
 
 #endif

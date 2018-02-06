@@ -60,10 +60,24 @@ sample_format_to_string(SampleFormat format)
 		return "32";
 
 	case SampleFormat::FLOAT:
-		return "f";
+		return "16";
+
+	case SampleFormat::DOUBLE:
+		return "64";
 
 	case SampleFormat::DSD:
 		return "dsd";
+
+#ifdef USE_ALSA_DOP
+	case SampleFormat::DOP64:
+		return "dop64";
+	case SampleFormat::DOP128:
+		return "dop128";
+	case SampleFormat::DOP256:
+		return "dop256";
+	case SampleFormat::DOP512:
+		return "dop512";
+#endif
 	}
 
 	/* unreachable */
@@ -78,8 +92,58 @@ audio_format_to_string(const AudioFormat af,
 	assert(s != nullptr);
 
 	snprintf(s->buffer, sizeof(s->buffer), "%u:%s:%u",
-		 af.sample_rate, sample_format_to_string(af.format),
+		 af.sample_rate,
+		 sample_format_to_string(af.format2 != SampleFormat::UNDEFINED ? af.format2 : af.format),
 		 af.channels);
 
 	return s->buffer;
+}
+
+snd_pcm_format_t
+get_bitformat(SampleFormat sample_format)
+{
+	switch (sample_format) {
+	case SampleFormat::UNDEFINED:
+		return SND_PCM_FORMAT_UNKNOWN;
+
+	case SampleFormat::DSD:
+#ifdef HAVE_ALSA_DSD
+		return SND_PCM_FORMAT_DSD_U8;
+#else
+		return SND_PCM_FORMAT_UNKNOWN;
+#endif
+
+	case SampleFormat::S8:
+		return SND_PCM_FORMAT_S8;
+
+	case SampleFormat::S16:
+		return SND_PCM_FORMAT_S16;
+
+	case SampleFormat::S24_P32:
+		return SND_PCM_FORMAT_S24;
+
+	case SampleFormat::S32:
+		return SND_PCM_FORMAT_S32;
+
+	case SampleFormat::FLOAT:
+	case SampleFormat::DOUBLE:
+		return SND_PCM_FORMAT_FLOAT;
+
+#ifdef USE_ALSA_DOP
+	case SampleFormat::DOP64:
+		return SND_PCM_FORMAT_DOP64;
+
+	case SampleFormat::DOP128:
+		return SND_PCM_FORMAT_DOP128;
+
+	case SampleFormat::DOP256:
+		return SND_PCM_FORMAT_DOP256;
+
+	case SampleFormat::DOP512:
+		return SND_PCM_FORMAT_DOP512;
+#endif
+	}
+
+	assert(false);
+	gcc_unreachable();
 }

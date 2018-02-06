@@ -80,6 +80,8 @@ public:
 			return value;
 		}
 
+		void SetValue(std::string str);
+
 		gcc_pure gcc_nonnull(2)
 		bool StringMatch(const char *s) const;
 
@@ -154,6 +156,8 @@ public:
 	 */
 	gcc_pure
 	std::string GetBase() const;
+
+	void SetBase(std::string str);
 };
 
 /**

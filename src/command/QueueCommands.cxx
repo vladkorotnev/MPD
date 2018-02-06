@@ -37,6 +37,9 @@
 #include "util/NumberParser.hxx"
 #include "util/Error.hxx"
 #include "fs/AllocatedPath.hxx"
+#include "db/plugins/upnp/UpnpDatabasePlugin.hxx"
+#include "db/Interface.hxx"
+#include "TagPrint.hxx"
 
 #include <limits>
 
@@ -77,12 +80,23 @@ handle_add(Client &client, ConstBuffer<const char *> args)
 		return CommandResult::OK;
 	}
 
+	unsigned start = 0, end = std::numeric_limits<unsigned>::max();
+
+	if (args.size == 2 && !check_range(client, &start, &end, args.back()))
+		return CommandResult::ERROR;
+
 #ifdef ENABLE_DATABASE
 	const ScopeBulkEdit bulk_edit(client.partition);
 
-	const DatabaseSelection selection(uri, true);
 	Error error;
-	return AddFromDatabase(client.partition, selection, error)
+	const Database *db = client.GetDatabase(error);
+	if (db == nullptr)
+		return print_error(client, error);
+	DatabaseSelection selection(uri, db->IsPlugin(upnp_db_plugin) ? false : true);
+	selection.window_start = start;
+	selection.window_end = end;
+
+	return AddFromDatabase(client, selection, error)
 		? CommandResult::OK
 		: print_error(client, error);
 #else
@@ -248,6 +262,22 @@ handle_plchangesposid(Client &client, ConstBuffer<const char *> args)
 CommandResult
 handle_playlistinfo(Client &client, ConstBuffer<const char *> args)
 {
+	DmsConfig	&df = client.partition.df;
+	if (df.source.isBluetooth()) {
+		client_printf(client, "file: bluetooth\n");
+		const Tag &tag = df.bluetooth.tag;
+		if (!tag.duration.IsNegative())
+			client_printf(client, "Time: %i\n"
+					  "duration: %1.3f\n",
+					  tag.duration.RoundS(),
+					  tag.duration.ToDoubleS());
+		for (const auto &i : tag) {
+			client_printf(client, "%s: %s\n", tag_item_names[i.type], i.value);
+		}
+		client_printf(client, "Pos: 0\nId: %u\n", df.bluetooth.id);
+		return CommandResult::OK;
+	}
+
 	unsigned start = 0, end = std::numeric_limits<unsigned>::max();
 	bool ret;
 

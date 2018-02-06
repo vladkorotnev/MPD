@@ -26,8 +26,11 @@
 #include "fs/FileInfo.hxx"
 #include "fs/AllocatedPath.hxx"
 #include "fs/DirectoryReader.hxx"
-
+#include "config/ConfigPath.hxx"
+#include "thread/Mutex.hxx"
 #include <string>
+
+Mutex local_mutex;
 
 class LocalDirectoryReader final : public StorageDirectoryReader {
 	AllocatedPath base_fs;
@@ -48,6 +51,12 @@ public:
 	const char *Read() override;
 	bool GetInfo(bool follow, StorageFileInfo &info,
 		     Error &error) override;
+	void Lock() override {
+		local_mutex.lock();
+	}
+	void Unlock() override{
+		local_mutex.unlock();
+	}
 };
 
 class LocalStorage final : public Storage {
@@ -211,7 +220,22 @@ CreateLocalStorage(Path base_fs)
 	return new LocalStorage(base_fs);
 }
 
+static Storage *
+CreateLocalStorageURI(gcc_unused EventLoop &event_loop, const char *base,
+			  Error &error)
+{
+	if (memcmp(base, "/", 1) != 0 && memcmp(base, "file://", 6) != 0)
+		return nullptr;
+	AllocatedPath path = ParsePath(base, error);
+	if (path.IsNull()) {
+		error.FormatPrefix("Invalid path %s", base);
+		return nullptr;
+	}
+
+	return CreateLocalStorage(path);
+}
+
 const StoragePlugin local_storage_plugin = {
 	"local",
-	nullptr,
+	CreateLocalStorageURI,
 };

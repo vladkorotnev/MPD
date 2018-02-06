@@ -21,16 +21,51 @@
 #include "PlayerControl.hxx"
 #include "Idle.hxx"
 #include "DetachedSong.hxx"
+#include "util/Domain.hxx"
+#include "dms/DmsControl.hxx"
+#include "Log.hxx"
+#include "Partition.hxx"
 
 #include <algorithm>
 
 #include <assert.h>
 
-PlayerControl::PlayerControl(PlayerListener &_listener,
+static constexpr Domain player_control_domain("player_control");
+
+const char *getCommandName(PlayerCommand cmd)
+{
+	switch (cmd) {
+	case PlayerCommand::NONE:
+		return "NONE";
+	case PlayerCommand::EXIT:
+		return "EXIT";
+	case PlayerCommand::STOP:
+		return "STOP";
+	case PlayerCommand::PAUSE:
+		return "PAUSE";
+	case PlayerCommand::SEEK:
+		return "SEEK";
+	case PlayerCommand::CLOSE_AUDIO:
+		return "CLOSE_AUDIO";
+	case PlayerCommand::UPDATE_AUDIO:
+		return "UPDATE_AUDIO";
+	case PlayerCommand::QUEUE:
+		return "QUEUE";
+	case PlayerCommand::CANCEL:
+		return "CANCEL";
+	case PlayerCommand::REFRESH:
+		return "REFRESH";
+	default:
+		return "unknown";
+	}
+}
+
+PlayerControl::PlayerControl(Partition &_partition,
+				 PlayerListener &_listener,
 			     MultipleOutputs &_outputs,
 			     unsigned _buffer_chunks,
 			     unsigned _buffered_before_play)
-	:listener(_listener), outputs(_outputs),
+	:partition(_partition), listener(_listener), outputs(_outputs),
 	 buffer_chunks(_buffer_chunks),
 	 buffered_before_play(_buffered_before_play),
 	 command(PlayerCommand::NONE),
@@ -164,6 +199,7 @@ PlayerControl::GetStatus()
 		status.audio_format = audio_format;
 		status.total_time = total_time;
 		status.elapsed_time = elapsed_time;
+		status.bufferd_time = bufferd_time;
 	}
 
 	Unlock();

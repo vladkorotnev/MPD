@@ -85,10 +85,20 @@ public:
 	 * Visit the selected entities.
 	 */
 	virtual bool Visit(const DatabaseSelection &selection,
+			   VisitDirectoryInfo visit_directory_info,
 			   VisitDirectory visit_directory,
 			   VisitSong visit_song,
 			   VisitPlaylist visit_playlist,
 			   Error &error) const = 0;
+
+	virtual bool Visit(const DatabaseSelection &selection,
+			   VisitDirectory visit_directory,
+			   VisitSong visit_song,
+			   VisitPlaylist visit_playlist,
+			   Error &error) const {
+		return Visit(selection, VisitDirectoryInfo(), visit_directory, visit_song,
+			     visit_playlist, error);
+	}
 
 	bool Visit(const DatabaseSelection &selection,
 		   VisitDirectory visit_directory,

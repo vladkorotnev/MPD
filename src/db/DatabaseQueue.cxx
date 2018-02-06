@@ -24,30 +24,56 @@
 #include "Partition.hxx"
 #include "Instance.hxx"
 #include "DetachedSong.hxx"
+#include "client/Client.hxx"
 
 #include <functional>
+
+static std::string
+get_parent(std::string str)
+{
+	auto p1 = str.rfind('/');
+	if (p1 == std::string::npos) {
+		return std::string("Folder");
+	}
+
+	auto p2 = str.rfind('/', p1-1);
+	if (p2 == std::string::npos) {
+		return std::string("Folder");
+	}
+	return str.substr(p2+1, p1-p2-1);
+}
 
 static bool
 AddToQueue(Partition &partition, const LightSong &song, Error &error)
 {
 	const Storage &storage = *partition.instance.storage;
-	unsigned id =
-		partition.playlist.AppendSong(partition.pc,
-					      DatabaseDetachSong(storage,
-								 song),
-					      error);
+	auto dsong = DatabaseDetachSong(storage, song);
+
+	const Tag &tag = dsong.GetTag();
+	if (!tag.HasType(TAG_ALBUM)) {
+		TagBuilder tb(tag);
+		tb.AddItem(TAG_ALBUM, get_parent(dsong.GetURI()).c_str());
+		dsong.SetTag(std::move(tb.Commit()));
+	}
+
+	unsigned id = partition.playlist.AppendSong(partition.pc, std::move(dsong), error);
+
 	return id != 0;
 }
 
 bool
-AddFromDatabase(Partition &partition, const DatabaseSelection &selection,
+AddFromDatabase(Client &client, const DatabaseSelection &selection,
 		Error &error)
 {
+	bool result;
+	Partition &partition = client.partition;
 	const Database *db = partition.instance.GetDatabase(error);
 	if (db == nullptr)
 		return false;
 
 	using namespace std::placeholders;
 	const auto f = std::bind(AddToQueue, std::ref(partition), _1, _2);
-	return db->Visit(selection, f, error);
+	result = db->Visit(selection, f, error);
+
+	return  result;
 }

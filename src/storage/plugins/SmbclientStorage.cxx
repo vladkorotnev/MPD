@@ -29,6 +29,9 @@
 #include "thread/Mutex.hxx"
 
 #include <libsmbclient.h>
+#include "util/Domain.hxx"
+#include "Log.hxx"
+static constexpr Domain domain("smbclient_storage");
 
 class SmbclientDirectoryReader final : public StorageDirectoryReader {
 	const std::string base;
@@ -46,6 +49,12 @@ public:
 	const char *Read() override;
 	bool GetInfo(bool follow, StorageFileInfo &info,
 		     Error &error) override;
+	void Lock() override {
+		smbclient_mutex.lock();
+	}
+	void Unlock() override{
+		smbclient_mutex.unlock();
+	}
 };
 
 class SmbclientStorage final : public Storage {
@@ -59,7 +68,6 @@ public:
 
 	virtual ~SmbclientStorage() {
 		smbclient_mutex.lock();
-		smbc_free_context(ctx, 1);
 		smbclient_mutex.unlock();
 	}
 
@@ -96,9 +104,7 @@ static bool
 GetInfo(const char *path, StorageFileInfo &info, Error &error)
 {
 	struct stat st;
-	smbclient_mutex.lock();
 	bool success = smbc_stat(path, &st) == 0;
-	smbclient_mutex.unlock();
 	if (!success) {
 		error.SetErrno();
 		return false;
@@ -123,7 +129,14 @@ SmbclientStorage::GetInfo(const char *uri_utf8, gcc_unused bool follow,
 			  StorageFileInfo &info, Error &error)
 {
 	const std::string mapped = MapUTF8(uri_utf8);
-	return ::GetInfo(mapped.c_str(), info, error);
+	if ((mapped.compare( base)) == 0) {
+		info.type = StorageFileInfo::Type::DIRECTORY;
+		return true;
+	}
+	smbclient_mutex.lock();
+	bool ret = ::GetInfo(mapped.c_str(), info, error);
+	smbclient_mutex.unlock();
+	return ret;
 }
 
 StorageDirectoryReader *
@@ -160,8 +173,6 @@ SmbclientDirectoryReader::~SmbclientDirectoryReader()
 const char *
 SmbclientDirectoryReader::Read()
 {
-	const ScopeLock protect(smbclient_mutex);
-
 	struct smbc_dirent *e;
 	while ((e = smbc_readdir(handle)) != nullptr) {
 		name = e->name;
@@ -192,20 +203,9 @@ CreateSmbclientStorageURI(gcc_unused EventLoop &event_loop, const char *base,
 		return nullptr;
 
 	const ScopeLock protect(smbclient_mutex);
-	SMBCCTX *ctx = smbc_new_context();
-	if (ctx == nullptr) {
-		error.SetErrno("smbc_new_context() failed");
-		return nullptr;
-	}
+	//smbc_getFunctionPurgeCachedServers(smbc_set_context(NULL))(smbc_set_context(NULL));
 
-	SMBCCTX *ctx2 = smbc_init_context(ctx);
-	if (ctx2 == nullptr) {
-		error.SetErrno("smbc_init_context() failed");
-		smbc_free_context(ctx, 1);
-		return nullptr;
-	}
-
-	return new SmbclientStorage(base, ctx2);
+	return new SmbclientStorage(base, nullptr);
 }
 
 const StoragePlugin smbclient_storage_plugin = {

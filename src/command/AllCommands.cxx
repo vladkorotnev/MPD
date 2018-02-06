@@ -30,6 +30,7 @@
 #include "MessageCommands.hxx"
 #include "NeighborCommands.hxx"
 #include "OtherCommands.hxx"
+#include "DmsCommands.hxx"
 #include "Permission.hxx"
 #include "tag/TagType.h"
 #include "protocol/Result.hxx"
@@ -39,6 +40,7 @@
 #include "util/Tokenizer.hxx"
 #include "util/Error.hxx"
 #include "util/ConstBuffer.hxx"
+#include "client/Response.hxx"
 
 #ifdef ENABLE_SQLITE
 #include "StickerCommands.hxx"
@@ -78,9 +80,12 @@ handle_not_commands(Client &client, ConstBuffer<const char *> args);
  * This array must be sorted!
  */
 static constexpr struct command commands[] = {
-	{ "add", PERMISSION_ADD, 1, 1, handle_add },
+	{ "add", PERMISSION_ADD, 1, 2, handle_add },
 	{ "addid", PERMISSION_ADD, 1, 2, handle_addid },
+	{ "addqueuetopl", PERMISSION_CONTROL, 1, 2, handle_addQueueToPlaylist },
+	{ "addqueuetoplaylist", PERMISSION_CONTROL, 1, 2, handle_addQueueToPlaylist },
 	{ "addtagid", PERMISSION_ADD, 3, 3, handle_addtagid },
+	{ "aliasname", PERMISSION_CONTROL, 0, 1, handle_aliasName },
 	{ "channels", PERMISSION_READ, 0, 0, handle_channels },
 	{ "clear", PERMISSION_CONTROL, 0, 0, handle_clear },
 	{ "clearerror", PERMISSION_CONTROL, 0, 0, handle_clearerror },
@@ -98,19 +103,39 @@ static constexpr struct command commands[] = {
 	{ "delete", PERMISSION_CONTROL, 1, 1, handle_delete },
 	{ "deleteid", PERMISSION_CONTROL, 1, 1, handle_deleteid },
 	{ "disableoutput", PERMISSION_ADMIN, 1, 1, handle_disableoutput },
+#if 1 //def ENABLE_DMS
+	{ "dmsappusertips", PERMISSION_CONTROL, 0, 1, handle_dmsAppUserTips },
+	{ "dmsbrightness", PERMISSION_CONTROL, 0, 1, handle_dmsBrightness },
+	{ "dmshmute", PERMISSION_CONTROL, 0, 1, handle_dmsHmute },
+	{ "dmsir", PERMISSION_CONTROL, 0, 1, handle_dmsIr },
+	{ "dmsmute", PERMISSION_CONTROL, 0, 1, handle_dmsMute },
+	{ "dmsrate", PERMISSION_CONTROL, 0, 0, handle_dmsRate },
+	{ "dmssource", PERMISSION_CONTROL, 0, 4, handle_dmssource },
+	{ "dmssrc", PERMISSION_CONTROL, 0, 1, handle_dmsSRC },
+	{ "dmsstartup", PERMISSION_CONTROL, 0, 1, handle_dmsStartup },
+	{ "dmsusertips", PERMISSION_CONTROL, 0, 1, handle_dmsUserTips },
+	{ "dmsvolume", PERMISSION_CONTROL, 0, 1, handle_dmsvolume },
+	{ "dmsvolumepolicy", PERMISSION_CONTROL, 0, 1, handle_dmsvolumepolicy },
+#endif
 	{ "enableoutput", PERMISSION_ADMIN, 1, 1, handle_enableoutput },
 #ifdef ENABLE_DATABASE
 	{ "find", PERMISSION_READ, 2, -1, handle_find },
 	{ "findadd", PERMISSION_ADD, 2, -1, handle_findadd},
+	{ "findaddpl", PERMISSION_CONTROL, 3, -1, handle_findaddpl },
+	{ "findsavepl", PERMISSION_CONTROL, 3, -1, handle_findsavepl },
 #endif
+	{ "getconfig", PERMISSION_CONTROL, 1, 1, handle_list_config },
+	{ "getsn", PERMISSION_CONTROL, 0, 0, handle_getSn },
 	{ "idle", PERMISSION_READ, 0, -1, handle_idle },
 	{ "kill", PERMISSION_ADMIN, -1, -1, handle_kill },
 #ifdef ENABLE_DATABASE
 	{ "list", PERMISSION_READ, 1, -1, handle_list },
 	{ "listall", PERMISSION_READ, 0, 1, handle_listall },
 	{ "listallinfo", PERMISSION_READ, 0, 1, handle_listallinfo },
+	{ "listconfig", PERMISSION_READ, 0, 1, handle_list_config },
 #endif
-	{ "listfiles", PERMISSION_READ, 0, 1, handle_listfiles },
+	{ "listfiles", PERMISSION_READ, 0, 3, handle_listfiles },
+	{ "listlocals", PERMISSION_READ, 0, 0, handle_listLocals },
 #ifdef ENABLE_DATABASE
 	{ "listmounts", PERMISSION_READ, 0, 0, handle_listmounts },
 #endif
@@ -120,8 +145,11 @@ static constexpr struct command commands[] = {
 	{ "listplaylist", PERMISSION_READ, 1, 1, handle_listplaylist },
 	{ "listplaylistinfo", PERMISSION_READ, 1, 1, handle_listplaylistinfo },
 	{ "listplaylists", PERMISSION_READ, 0, 0, handle_listplaylists },
+	{ "listsources", PERMISSION_READ, 0, 0, handle_listSources },
+	{ "liststartups", PERMISSION_READ, 0, 0, handle_listStartups },
 	{ "load", PERMISSION_ADD, 1, 2, handle_load },
-	{ "lsinfo", PERMISSION_READ, 0, 1, handle_lsinfo },
+	{ "loadqueue", PERMISSION_ADD, 0, 0, handle_loadSourceQueue },
+	{ "lsinfo", PERMISSION_READ, 0, 2, handle_lsinfo },
 	{ "mixrampdb", PERMISSION_CONTROL, 1, 1, handle_mixrampdb },
 	{ "mixrampdelay", PERMISSION_CONTROL, 1, 1, handle_mixrampdelay },
 #ifdef ENABLE_DATABASE
@@ -129,6 +157,7 @@ static constexpr struct command commands[] = {
 #endif
 	{ "move", PERMISSION_CONTROL, 2, 2, handle_move },
 	{ "moveid", PERMISSION_CONTROL, 2, 2, handle_moveid },
+	{ "neighboroptions", PERMISSION_CONTROL, 0, 2, handle_neighborOptions },
 	{ "next", PERMISSION_CONTROL, 0, 0, handle_next },
 	{ "notcommands", PERMISSION_NONE, 0, 0, handle_not_commands },
 	{ "outputs", PERMISSION_READ, 0, 0, handle_devices },
@@ -138,25 +167,36 @@ static constexpr struct command commands[] = {
 	{ "play", PERMISSION_CONTROL, 0, 1, handle_play },
 	{ "playid", PERMISSION_CONTROL, 0, 1, handle_playid },
 	{ "playlist", PERMISSION_READ, 0, 0, handle_playlist },
-	{ "playlistadd", PERMISSION_CONTROL, 2, 2, handle_playlistadd },
+	{ "playlistadd", PERMISSION_CONTROL, 2, 3, handle_playlistadd },
 	{ "playlistclear", PERMISSION_CONTROL, 1, 1, handle_playlistclear },
 	{ "playlistdelete", PERMISSION_CONTROL, 2, 2, handle_playlistdelete },
 	{ "playlistfind", PERMISSION_READ, 2, -1, handle_playlistfind },
 	{ "playlistid", PERMISSION_READ, 0, 1, handle_playlistid },
 	{ "playlistinfo", PERMISSION_READ, 0, 1, handle_playlistinfo },
+	{ "playlistload", PERMISSION_CONTROL, 2, 3, handle_playlistload },
 	{ "playlistmove", PERMISSION_CONTROL, 3, 3, handle_playlistmove },
+	{ "playlistsave", PERMISSION_CONTROL, 2, 3, handle_playlistsave },
 	{ "playlistsearch", PERMISSION_READ, 2, -1, handle_playlistsearch },
+	{ "playmode", PERMISSION_CONTROL, 0, 1, handle_playmode },
 	{ "plchanges", PERMISSION_READ, 1, 1, handle_plchanges },
 	{ "plchangesposid", PERMISSION_READ, 1, 1, handle_plchangesposid },
+	{ "poweron", PERMISSION_CONTROL, 0, 1, handle_poweron },
 	{ "previous", PERMISSION_CONTROL, 0, 0, handle_previous },
 	{ "prio", PERMISSION_CONTROL, 2, -1, handle_prio },
 	{ "prioid", PERMISSION_CONTROL, 2, -1, handle_prioid },
+#if 0 //ndef ENABLE_DMS
 	{ "random", PERMISSION_CONTROL, 1, 1, handle_random },
+#endif
 	{ "rangeid", PERMISSION_ADD, 2, 2, handle_rangeid },
 	{ "readcomments", PERMISSION_READ, 1, 1, handle_read_comments },
+	{ "readcover", PERMISSION_READ, 1, 1, handle_read_cover },
+	{ "readcovers", PERMISSION_READ, 1, 1, handle_read_cover },
 	{ "readmessages", PERMISSION_READ, 0, 0, handle_read_messages },
 	{ "rename", PERMISSION_CONTROL, 2, 2, handle_rename },
+	{ "renamesourcename", PERMISSION_CONTROL, 2, 2, handle_renameSourceName },
+#if 0 //ndef ENABLE_DMS
 	{ "repeat", PERMISSION_CONTROL, 1, 1, handle_repeat },
+#endif
 	{ "replay_gain_mode", PERMISSION_CONTROL, 1, 1,
 	  handle_replay_gain_mode },
 	{ "replay_gain_status", PERMISSION_READ, 0, 0,
@@ -164,18 +204,26 @@ static constexpr struct command commands[] = {
 	{ "rescan", PERMISSION_CONTROL, 0, 1, handle_rescan },
 	{ "rm", PERMISSION_CONTROL, 1, 1, handle_rm },
 	{ "save", PERMISSION_CONTROL, 1, 1, handle_save },
+	{ "savequeue", PERMISSION_CONTROL, 0, 0, handle_saveQueue },
+#ifdef ENABLE_NEIGHBOR_PLUGINS
+	{ "scanneighbors", PERMISSION_CONTROL, 0, 0, handle_scanNeighbors },
+#endif
 #ifdef ENABLE_DATABASE
 	{ "search", PERMISSION_READ, 2, -1, handle_search },
 	{ "searchadd", PERMISSION_ADD, 2, -1, handle_searchadd },
 	{ "searchaddpl", PERMISSION_CONTROL, 3, -1, handle_searchaddpl },
+	{ "searchsavepl", PERMISSION_CONTROL, 3, -1, handle_searchsavepl },
 #endif
 	{ "seek", PERMISSION_CONTROL, 2, 2, handle_seek },
 	{ "seekcur", PERMISSION_CONTROL, 1, 1, handle_seekcur },
 	{ "seekid", PERMISSION_CONTROL, 2, 2, handle_seekid },
 	{ "sendmessage", PERMISSION_CONTROL, 2, 2, handle_send_message },
+	{ "setconfig", PERMISSION_CONTROL, 2, 2, handle_set_config },
 	{ "setvol", PERMISSION_CONTROL, 1, 1, handle_setvol },
 	{ "shuffle", PERMISSION_CONTROL, 0, 1, handle_shuffle },
+#if 0 //ndef ENABLE_DMS
 	{ "single", PERMISSION_CONTROL, 1, 1, handle_single },
+#endif
 	{ "stats", PERMISSION_READ, 0, 0, handle_stats },
 	{ "status", PERMISSION_READ, 0, 0, handle_status },
 #ifdef ENABLE_SQLITE
@@ -262,7 +310,7 @@ command_init()
 {
 #ifndef NDEBUG
 	/* ensure that the command list is sorted */
-	for (unsigned i = 0; i < num_commands - 1; ++i)
+	for (unsigned i = 0; i < (unsigned)num_commands - 1; ++i)
 		assert(strcmp(commands[i].cmd, commands[i + 1].cmd) < 0);
 #endif
 }
@@ -350,7 +398,7 @@ command_checked_lookup(Client &client, unsigned permission,
 
 CommandResult
 command_process(Client &client, unsigned num, char *line)
-{
+try {
 	Error error;
 
 	command_list_num = num;
@@ -419,4 +467,8 @@ command_process(Client &client, unsigned num, char *line)
 	command_list_num = 0;
 
 	return ret;
+} catch (const std::exception &e) {
+	Response r(client, num);
+	PrintError(r, std::current_exception());
+	return CommandResult::ERROR;
 }

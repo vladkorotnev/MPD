@@ -47,6 +47,19 @@ static const char *const idle_names[] = {
 	"message",
 	"neighbor",
 	"mount",
+	"dms_source",
+	"dms_volume",
+	"dms_SRC",
+	"dms_tube",
+	"dms_rate",
+	"dms_bluetooth",
+	"poweron",
+	"local",
+	"usertips",
+	"login",
+	"sound_quality",
+	"album_uri",
+	"config",
 	nullptr
 };
 

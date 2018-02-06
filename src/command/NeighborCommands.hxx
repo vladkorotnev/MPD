@@ -34,4 +34,7 @@ neighbor_commands_available(const Instance &instance);
 CommandResult
 handle_listneighbors(Client &client, ConstBuffer<const char *> args);
 
+CommandResult
+handle_scanNeighbors(Client &client, ConstBuffer<const char *> args);
+
 #endif

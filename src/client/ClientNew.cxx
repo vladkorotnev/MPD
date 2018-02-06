@@ -28,6 +28,7 @@
 #include "Permission.hxx"
 #include "util/Error.hxx"
 #include "Log.hxx"
+#include "dms/Context.hxx"
 
 #include <assert.h>
 #ifdef WIN32
@@ -48,6 +49,7 @@ Client::Client(EventLoop &_loop, Partition &_partition,
 	 TimeoutMonitor(_loop),
 	 partition(_partition),
 	 playlist(partition.playlist), player_control(partition.pc),
+	 context(*_partition.instance.dc),
 	 permission(getDefaultPermissions()),
 	 uid(_uid),
 	 num(_num),

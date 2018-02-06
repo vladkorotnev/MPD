@@ -64,6 +64,7 @@ public:
 
 	bool Open(Error &error);
 	void Close();
+	bool Reopen(Error &error);
 
 	/**
 	 * Get the combined list of all neighbors from all active
@@ -71,6 +72,10 @@ public:
 	 */
 	gcc_pure
 	List GetList() const;
+
+	int Scanning() const;
+
+	NeighborExplorer *GetSmbclientNeighborExplorer();
 };
 
 #endif

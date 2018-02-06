@@ -34,13 +34,20 @@
 #include "protocol/Result.hxx"
 #include "protocol/ArgParser.hxx"
 #include "BulkEdit.hxx"
+#include "Partition.hxx"
+#include "PlaylistError.hxx"
+#include "PlaylistFile.hxx"
+#include "fs/AllocatedPath.hxx"
+#include "fs/FileSystem.hxx"
+#include "db/plugins/upnp/UpnpDatabasePlugin.hxx"
+#include "db/Interface.hxx"
 
 #include <string.h>
 
 CommandResult
 handle_listfiles_db(Client &client, const char *uri)
 {
-	const DatabaseSelection selection(uri, false);
+	DatabaseSelection selection(uri, false);
 
 	Error error;
 	if (!db_selection_print(client, selection, false, true, error))
@@ -55,7 +62,13 @@ handle_lsinfo2(Client &client, ConstBuffer<const char *> args)
 	/* default is root directory */
 	const char *const uri = args.IsEmpty() ? "" : args.front();
 
-	const DatabaseSelection selection(uri, false);
+	unsigned start = 0, end = std::numeric_limits<unsigned>::max();
+	if (args.size == 2 && !check_range(client, &start, &end, args.back()))
+		return CommandResult::ERROR;
+
+	DatabaseSelection selection(uri, false);
+	selection.window_start = start;
+	selection.window_end = end;
 
 	Error error;
 	if (!db_selection_print(client, selection, true, false, error))
@@ -68,6 +81,7 @@ static CommandResult
 handle_match(Client &client, ConstBuffer<const char *> args, bool fold_case)
 {
 	unsigned window_start = 0, window_end = std::numeric_limits<int>::max();
+	const char *host = nullptr;
 	if (args.size >= 2 && strcmp(args[args.size - 2], "window") == 0) {
 		if (!check_range(client, &window_start, &window_end,
 				 args.back()))
@@ -83,7 +97,7 @@ handle_match(Client &client, ConstBuffer<const char *> args, bool fold_case)
 		return CommandResult::ERROR;
 	}
 
-	const DatabaseSelection selection("", true, &filter);
+	DatabaseSelection selection(host == nullptr?"":host, true, &filter);
 
 	Error error;
 	return db_selection_print(client, selection, true, false,
@@ -115,9 +129,18 @@ handle_match_add(Client &client, ConstBuffer<const char *> args, bool fold_case)
 
 	const ScopeBulkEdit bulk_edit(client.partition);
 
-	const DatabaseSelection selection("", true, &filter);
+	DmsConfig	&df = client.partition.df;
+	DmsSource &source = df.source;
+	std::string uri("");
+	if (source.value == SOURCE_UPNP) {
+		uri = source.getName();
+	}
 	Error error;
-	return AddFromDatabase(client.partition, selection, error)
+	const Database *db = client.GetDatabase(error);
+	if (db == nullptr)
+		return print_error(client, error);
+	const DatabaseSelection selection(uri.c_str(), (db->IsPlugin(upnp_db_plugin) ? false : true), &filter);
+	return AddFromDatabase(client, selection, error)
 		? CommandResult::OK
 		: print_error(client, error);
 }
@@ -129,6 +152,66 @@ handle_findadd(Client &client, ConstBuffer<const char *> args)
 }
 
 CommandResult
+handle_findaddpl(Client &client, ConstBuffer<const char *> args)
+{
+	DmsConfig	&df = client.partition.df;
+	std::string playlist = df.source.getPlaylistName(args.shift());
+
+	SongFilter filter;
+	if (!filter.Parse(args, false)) {
+		command_error(client, ACK_ERROR_ARG, "incorrect arguments");
+		return CommandResult::ERROR;
+	}
+
+	const DatabaseSelection selection("", true, &filter);
+
+	Error error;
+	const Database *db = client.GetDatabase(error);
+	if (db == nullptr)
+		return print_error(client, error);
+
+	return search_add_to_playlist(*db, *client.GetStorage(),
+				      playlist.c_str(), selection, error)
+		? CommandResult::OK
+		: print_error(client, error);
+}
+
+CommandResult
+handle_findsavepl(Client &client, ConstBuffer<const char *> args)
+{
+	DmsConfig	&df = client.partition.df;
+	std::string playlist = df.source.getPlaylistName(args.shift());
+	Error error;
+
+	SongFilter filter;
+	if (!filter.Parse(args, false)) {
+		command_error(client, ACK_ERROR_ARG, "incorrect arguments");
+		return CommandResult::ERROR;
+	}
+
+	const DatabaseSelection selection("", true, &filter);
+
+	const auto path_fs = spl_map_to_fs(playlist.c_str(), error);
+	if (path_fs.IsNull())
+		return print_error(client, error);
+
+	if (FileExists(path_fs)) {
+		error.Set(playlist_domain, int(PlaylistResult::LIST_EXISTS),
+			  "Playlist already exists");
+		return print_error(client, error);
+	}
+
+	const Database *db = client.GetDatabase(error);
+	if (db == nullptr)
+		return print_error(client, error);
+
+	return search_add_to_playlist(*db, *client.GetStorage(),
+				      playlist.c_str(), selection, error)
+		? CommandResult::OK
+		: print_error(client, error);
+}
+
+CommandResult
 handle_searchadd(Client &client, ConstBuffer<const char *> args)
 {
 	return handle_match_add(client, args, true);
@@ -137,7 +220,8 @@ handle_searchadd(Client &client, ConstBuffer<const char *> args)
 CommandResult
 handle_searchaddpl(Client &client, ConstBuffer<const char *> args)
 {
-	const char *playlist = args.shift();
+	DmsConfig	&df = client.partition.df;
+	std::string playlist = df.source.getPlaylistName(args.shift());
 
 	SongFilter filter;
 	if (!filter.Parse(args, true)) {
@@ -145,13 +229,50 @@ handle_searchaddpl(Client &client, ConstBuffer<const char *> args)
 		return CommandResult::ERROR;
 	}
 
+	const DatabaseSelection selection("", true, &filter);
+
 	Error error;
 	const Database *db = client.GetDatabase(error);
 	if (db == nullptr)
 		return print_error(client, error);
 
 	return search_add_to_playlist(*db, *client.GetStorage(),
-				      "", playlist, &filter, error)
+				      playlist.c_str(), selection, error)
+		? CommandResult::OK
+		: print_error(client, error);
+}
+
+CommandResult
+handle_searchsavepl(Client &client, ConstBuffer<const char *> args)
+{
+	DmsConfig	&df = client.partition.df;
+	std::string playlist = df.source.getPlaylistName(args.shift());
+	Error error;
+
+	const auto path_fs = spl_map_to_fs(playlist.c_str(), error);
+	if (path_fs.IsNull())
+		return print_error(client, error);
+
+	if (FileExists(path_fs)) {
+		error.Set(playlist_domain, int(PlaylistResult::LIST_EXISTS),
+			  "Playlist already exists");
+		return print_error(client, error);
+	}
+
+	SongFilter filter;
+	if (!filter.Parse(args, true)) {
+		command_error(client, ACK_ERROR_ARG, "incorrect arguments");
+		return CommandResult::ERROR;
+	}
+
+	const DatabaseSelection selection("", true, &filter);
+
+	const Database *db = client.GetDatabase(error);
+	if (db == nullptr)
+		return print_error(client, error);
+
+	return search_add_to_playlist(*db, *client.GetStorage(),
+				      playlist.c_str(), selection, error)
 		? CommandResult::OK
 		: print_error(client, error);
 }
@@ -192,7 +313,8 @@ handle_listall(Client &client, ConstBuffer<const char *> args)
 	const char *const uri = args.IsEmpty() ? "" : args.front();
 
 	Error error;
-	return db_selection_print(client, DatabaseSelection(uri, true),
+	DatabaseSelection selection(uri, true);
+	return db_selection_print(client, selection,
 				  false, false, error)
 		? CommandResult::OK
 		: print_error(client, error);
@@ -277,7 +399,8 @@ handle_listallinfo(Client &client, ConstBuffer<const char *> args)
 	const char *const uri = args.IsEmpty() ? "" : args.front();
 
 	Error error;
-	return db_selection_print(client, DatabaseSelection(uri, true),
+	DatabaseSelection selection(uri, true);
+	return db_selection_print(client, selection,
 				  true, false, error)
 		? CommandResult::OK
 		: print_error(client, error);

@@ -22,8 +22,17 @@
 #include "util/Domain.hxx"
 #include "Partition.hxx"
 #include "Instance.hxx"
+#include "IOThread.hxx"
+#include "dms/Context.hxx"
+
+extern Instance *instance;
 
 const Domain client_domain("client");
+
+IgnoreClient::IgnoreClient()
+	: client(io_thread_get(), *instance->partition, -1, -1, -1)
+{
+}
 
 #ifdef ENABLE_DATABASE
 
@@ -40,3 +49,11 @@ Client::GetStorage() const
 }
 
 #endif
+
+Dms::Context &
+Client::GetContext()
+{
+	assert(partition.instance.dc != nullptr);
+
+	return *partition.instance.dc;
+}

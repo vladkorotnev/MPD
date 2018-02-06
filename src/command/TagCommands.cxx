@@ -26,6 +26,7 @@
 #include "tag/Tag.hxx"
 #include "Partition.hxx"
 #include "util/ConstBuffer.hxx"
+#include "Idle.hxx"
 
 CommandResult
 handle_addtagid(Client &client, ConstBuffer<const char *> args)
@@ -48,6 +49,10 @@ handle_addtagid(Client &client, ConstBuffer<const char *> args)
 	if (!client.partition.playlist.AddSongIdTag(song_id, tag_type, value,
 						    error))
 		return print_error(client, error);
+
+	if (tag_type == TAG_ALBUM_URI) {
+		idle_add(IDLE_ALBUM_URI);
+	}
 
 	return CommandResult::OK;
 }

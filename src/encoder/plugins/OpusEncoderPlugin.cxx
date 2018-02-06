@@ -152,6 +152,7 @@ opus_encoder_open(Encoder *_encoder,
 	switch (audio_format.format) {
 	case SampleFormat::S16:
 	case SampleFormat::FLOAT:
+	case SampleFormat::DOUBLE:
 		break;
 
 	case SampleFormat::S8:

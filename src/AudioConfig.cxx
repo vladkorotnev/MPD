@@ -34,6 +34,26 @@ getOutputAudioFormat(AudioFormat inAudioFormat)
 {
 	AudioFormat out_audio_format = inAudioFormat;
 	out_audio_format.ApplyMask(configured_audio_format);
+	if (!out_audio_format.IsDSDOrDoP() &&
+		out_audio_format.sample_rate == 705600 &&
+		out_audio_format.format != SampleFormat::S24_P32) {
+		out_audio_format.format = SampleFormat::S24_P32;
+	}
+	if (inAudioFormat.format == SampleFormat::DSD) {
+		switch (inAudioFormat.sample_rate) {
+		case 44100 * 64 / 8:
+		case 44100 * 128 / 8:
+		case 44100 * 256 / 8:
+		case 44100 * 512 / 8:
+			out_audio_format.format = SampleFormat::FLOAT;
+			out_audio_format.sample_rate = 352800;
+			out_audio_format.format2 = inAudioFormat.format;
+			out_audio_format.sample_rate2 = inAudioFormat.sample_rate;
+			break;
+		default:
+			break;
+		}
+	}
 	return out_audio_format;
 }
 

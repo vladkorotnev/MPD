@@ -235,7 +235,7 @@ AppendFileOutputStream::AppendFileOutputStream(Path _path, Error &error)
 	}
 #else
 	if (!SetFD().Open(GetPath().c_str(),
-			  O_WRONLY|O_APPEND))
+			  O_WRONLY|O_CREAT|O_APPEND))
 		error.FormatErrno("Failed to append to %s",
 				  GetPath().c_str());
 #endif

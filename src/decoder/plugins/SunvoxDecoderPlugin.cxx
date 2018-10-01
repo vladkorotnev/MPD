@@ -29,12 +29,16 @@
 
 #include "sunvox.h"
 
+#include <stdlib.h>
+#include <unistd.h>
 #include <assert.h>
 
 #define SUNVOX_PLAY_SLOT 0
 #define SUNVOX_SCAN_SLOT 1
 
-static constexpr size_t SUNVOX_FRAME_SIZE = 4096;
+int g_sv_channels_num = 2; //1 - mono; 2 - stereo
+int g_sv_buffer_size = 4096; //Audio buffer size (number of frames)
+
 static constexpr size_t SUNVOX_PREALLOC_BLOCK = 256 * 1024;
 static constexpr offset_type SUNVOX_FILE_LIMIT = 100 * 1024 * 1024;
 
@@ -51,8 +55,8 @@ sunvox_decoder_init(const ConfigBlock &block)
 		throw FormatRuntimeError("Cannot load sunvox library.");
 	}*/
 	
-	sunvox_sample_rate = block.GetBlockValue("svsamplerate", 44100);
-	const unsigned int flags = SV_INIT_FLAG_USER_AUDIO_CALLBACK;
+	sunvox_sample_rate = block.GetBlockValue("svsamplerate", sunvox_sample_rate);
+	const unsigned int flags = SV_INIT_FLAG_USER_AUDIO_CALLBACK | SV_INIT_FLAG_AUDIO_INT16;
 	 int ver = sv_init( 0, sunvox_sample_rate, 2, flags );
     if( ver >= 0 )
     {
@@ -146,7 +150,7 @@ LoadSunVoxFile(DecoderClient *client, InputStream &is, int slot)
 static void
 sun_decode(DecoderClient &client, InputStream &is)
 {
-	char audio_buffer[SUNVOX_FRAME_SIZE];
+	signed int * audio_buffer = (signed int*)malloc( g_sv_buffer_size * 2 * sizeof( signed int ) ); ;
 	sv_open_slot( SUNVOX_PLAY_SLOT );
 	bool couldLoad = LoadSunVoxFile(&client, is, SUNVOX_PLAY_SLOT);
 	if(!couldLoad) {
@@ -157,23 +161,55 @@ sun_decode(DecoderClient &client, InputStream &is)
 	static AudioFormat audio_format(sunvox_sample_rate, SampleFormat::S16, 2);
 	assert(audio_format.IsValid());
 	
-	unsigned int frameCount = sv_get_song_length_frames( SUNVOX_PLAY_SLOT );
-	unsigned int msecs = (frameCount*1000 / sunvox_sample_rate);
-	
-	client.Ready(audio_format, false /*canSeek*/,
+	unsigned long frameCount = sv_get_song_length_frames( SUNVOX_PLAY_SLOT );
+	unsigned long msecs = ((frameCount*1000) / sunvox_sample_rate);
+	//printf("From %lu frames at %i Hz -> %lu msec\n", frameCount, sunvox_sample_rate, msecs);
+	client.Ready(audio_format, true /*canSeek*/,
 		     SongTime::FromMS(msecs));
 		     
+	sv_set_autostop(SUNVOX_PLAY_SLOT,1);
+	sv_play_from_beginning(SUNVOX_PLAY_SLOT);
+		     
 	DecoderCommand cmd;
+	unsigned int t =0 ;
 	do {
-		sv_audio_callback( &audio_buffer, SUNVOX_FRAME_SIZE/2, 0, sv_get_ticks() );
-	
-
+		
+		 t= sv_get_ticks();
+		sv_audio_callback( audio_buffer, g_sv_buffer_size/2, 0, t );
 		cmd = client.SubmitData(nullptr,
-					audio_buffer, 0,
+					audio_buffer, g_sv_buffer_size*2,
 					0);
-
+		if (cmd == DecoderCommand::SEEK) {
+			
+			unsigned int seekpos =  client.GetSeekTime().ToMS()/1000;
+			printf("Want to seek at %u", seekpos);
+			unsigned int line_pos = 0;
+			
+			unsigned int ticks_per_sec = sv_get_ticks_per_second()/1000;
+			printf(" -> at %u TPS", ticks_per_sec);
+			unsigned int ticks_per_line = sv_get_song_tpl( SUNVOX_PLAY_SLOT );
+			printf(" and %u TPL", ticks_per_line);
+			
+			unsigned int lines_per_sec = ticks_per_sec / ticks_per_line;
+			printf(" -> LPS: %u", lines_per_sec);
+			
+			
+			line_pos = seekpos * lines_per_sec;
+			printf(" -> goto %u\n", line_pos);
+			
+			sv_rewind( SUNVOX_PLAY_SLOT, line_pos );
+			sv_play (SUNVOX_PLAY_SLOT);
+			
+			client.CommandFinished();
+		} 
+		if(sv_end_of_song(SUNVOX_PLAY_SLOT) && t > 0) {
+				// there may be some buffer left
+				usleep( 500000 * g_sv_buffer_size / sunvox_sample_rate);
+			break;
+		}
 	} while (cmd != DecoderCommand::STOP);
 	
+	sv_stop ( SUNVOX_PLAY_SLOT );
 	sv_close_slot( SUNVOX_PLAY_SLOT );
 }
 
@@ -187,9 +223,9 @@ sunvox_scan_stream(InputStream &is, TagHandler &handler) noexcept
 		return false;
 	}
 	
-	unsigned int frameCount = sv_get_song_length_frames( SUNVOX_SCAN_SLOT );
-	unsigned int msecs = (frameCount*1000 / sunvox_sample_rate);
-	
+	unsigned long frameCount = sv_get_song_length_frames( SUNVOX_SCAN_SLOT );
+	unsigned long msecs = ((frameCount*1000) / sunvox_sample_rate);
+
 	handler.OnDuration(SongTime::FromMS(msecs));
 
 	const char *title = sv_get_song_name( SUNVOX_SCAN_SLOT );

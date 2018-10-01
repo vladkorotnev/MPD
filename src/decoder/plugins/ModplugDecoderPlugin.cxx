@@ -43,6 +43,9 @@ static int modplug_loop_count;
 static bool
 modplug_decoder_init(const ConfigBlock &block)
 {
+	LogWarning(modplug_domain, "Init Modplug plugin");
+	
+	
 	modplug_loop_count = block.GetBlockValue("loop_count", 0);
 	if (modplug_loop_count < -1)
 		throw FormatRuntimeError("Invalid loop count in line %d: %i",

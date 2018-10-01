@@ -1305,6 +1305,14 @@ noinst_LIBRARIES += libmodplug_decoder_plugin.a
 DECODER_LIBS += libmodplug_decoder_plugin.a $(MODPLUG_LIBS)
 endif
 
+# if ENABLE_SUNVOX
+
+libdecoder_a_SOURCES += \
+	src/decoder/plugins/SunvoxDecoderPlugin.cxx \
+	src/decoder/plugins/SunvoxDecoderPlugin.hxx
+DECODER_LIBS += -lsunvox
+# endif
+
 if ENABLE_SIDPLAY
 libdecoder_a_SOURCES += \
 	src/decoder/plugins/SidplayDecoderPlugin.cxx \

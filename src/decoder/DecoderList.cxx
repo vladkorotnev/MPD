@@ -42,6 +42,7 @@
 #include "plugins/MikmodDecoderPlugin.hxx"
 #include "plugins/ModplugDecoderPlugin.hxx"
 #include "plugins/MpcdecDecoderPlugin.hxx"
+#include "plugins/SunvoxDecoderPlugin.hxx"
 #include "plugins/FluidsynthDecoderPlugin.hxx"
 #include "plugins/SidplayDecoderPlugin.hxx"
 #include "util/Macros.hxx"
@@ -108,6 +109,9 @@ const struct DecoderPlugin *const decoder_plugins[] = {
 #endif
 #ifdef ENABLE_GME
 	&gme_decoder_plugin,
+#endif
+#ifdef ENABLE_SUNVOX
+	&sunvox_decoder_plugin,
 #endif
 	&pcm_decoder_plugin,
 	nullptr

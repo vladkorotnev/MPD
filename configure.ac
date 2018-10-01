@@ -890,6 +890,7 @@ dnl ---------------------------------------------------------------------------
 dnl Decoder Plugins
 dnl ---------------------------------------------------------------------------
 
+
 dnl -------------------------------- libadplug --------------------------------
 MPD_ENABLE_AUTO_PKG(adplug, ADPLUG, [adplug],
 	[AdPlug decoder plugin], [libadplug not found])
@@ -952,6 +953,11 @@ MPD_ENABLE_AUTO_PKG(mikmod, LIBMIKMOD, [libmikmod >= 3.2],
 dnl -------------------------------- libmodplug -------------------------------
 MPD_ENABLE_AUTO_PKG(modplug, MODPLUG, [libmodplug],
 	[modplug decoder plugin], [libmodplug not found])
+	
+dnl -------------------------------- sunvox -------------------------------
+AM_CONDITIONAL(ENABLE_SUNVOX, 1)
+AC_DEFINE(ENABLE_SUNVOX, 1, [Define to enable Sunvox])
+
 
 dnl -------------------------------- libopus ----------------------------------
 MPD_ENABLE_AUTO_PKG(opus, OPUS, [opus ogg],
@@ -1506,6 +1512,7 @@ results(vorbis, [OggVorbis])
 results(audiofile, [WAVE])
 results(wavpack, [WavPack])
 results(wildmidi, [WildMidi])
+results(sunvox, [SunVox])
 
 printf '\nOther features:\n\t'
 results(lsr, [libsamplerate])
